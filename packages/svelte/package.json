@@ -1,0 +1,50 @@
+{
+  "name": "@oh-new-editor/svelte",
+  "version": "0.1.0",
+  "description": "Svelte adapter for Oh New Editor",
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yohan/oh-new-editor.git",
+    "directory": "packages/svelte"
+  },
+  "homepage": "https://github.com/yohan/oh-new-editor",
+  "bugs": {
+    "url": "https://github.com/yohan/oh-new-editor/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "scripts": {
+    "build": "rm -rf dist && vite build && cp src/index.d.ts dist/index.d.ts",
+    "dev": "vite build --watch",
+    "typecheck": "svelte-check --tsconfig ./tsconfig.json"
+  },
+  "peerDependencies": {
+    "@oh-new-editor/core": "workspace:*",
+    "svelte": ">=5"
+  },
+  "dependencies": {
+    "@oh-new-editor/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^6.2.1",
+    "svelte": "^5.39.6",
+    "svelte-check": "^4.3.1",
+    "typescript": "^6.0.2",
+    "vite": "^7.1.9"
+  }
+}

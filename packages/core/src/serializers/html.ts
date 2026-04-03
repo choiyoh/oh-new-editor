@@ -2,7 +2,7 @@ import createDOMPurify from 'dompurify';
 import { DOMSerializer } from 'prosemirror-model';
 
 import { editorSchema } from '../schema';
-import type { EditorDocument } from '../types';
+import type { EditorDocument, EditorSchema } from '../types';
 
 const ALLOWED_TAGS = [
   'a',
@@ -62,8 +62,8 @@ export function sanitizeHtml(html: string) {
   });
 }
 
-export function serializeHtml(doc: EditorDocument) {
-  const serializer = DOMSerializer.fromSchema(editorSchema);
+export function serializeHtml(doc: EditorDocument, schema: EditorSchema = editorSchema) {
+  const serializer = DOMSerializer.fromSchema(schema);
   const fragment = serializer.serializeFragment(doc.content);
   const container = window.document.createElement('div');
   container.append(fragment);

@@ -49,7 +49,7 @@ function createTurndownService() {
 
   service.addRule('codeBlockWithLanguage', {
     filter: 'pre',
-    replacement: (_content, node) => {
+    replacement: (_content: string, node: HTMLElement) => {
       const codeNode = node.querySelector('code');
       const language = codeNode?.getAttribute('data-language') ?? node.getAttribute('data-language') ?? '';
       const code = (codeNode?.textContent ?? node.textContent ?? '').replace(/\n+$/, '');
@@ -59,12 +59,12 @@ function createTurndownService() {
 
   service.addRule('underlineFallback', {
     filter: 'u',
-    replacement: (content) => `<u>${content}</u>`
+    replacement: (content: string) => `<u>${content}</u>`
   });
 
   service.addRule('fontSizeFallback', {
-    filter: (node) => node.nodeName === 'SPAN' && node instanceof HTMLElement && Boolean(node.style.fontSize),
-    replacement: (content, node) => {
+    filter: (node: HTMLElement) => node.nodeName === 'SPAN' && node instanceof HTMLElement && Boolean(node.style.fontSize),
+    replacement: (content: string, node: HTMLElement) => {
       const size = node instanceof HTMLElement ? node.style.fontSize : '';
       return `<span style="font-size: ${size}">${content}</span>`;
     }
@@ -72,12 +72,12 @@ function createTurndownService() {
 
   service.addRule('strikethrough', {
     filter: ['del', 's', 'strike'],
-    replacement: (content) => `~~${content}~~`
+    replacement: (content: string) => `~~${content}~~`
   });
 
   service.addRule('image', {
     filter: 'img',
-    replacement: (_content, node) => {
+    replacement: (_content: string, node: HTMLElement) => {
       const src = node.getAttribute('src');
       if (!src) return '';
 
@@ -90,7 +90,7 @@ function createTurndownService() {
 
   service.addRule('table', {
     filter: 'table',
-    replacement: (_content, node) => {
+    replacement: (_content: string, node: HTMLElement) => {
       if (!(node instanceof HTMLTableElement)) {
         return `\n\n${node.outerHTML}\n\n`;
       }

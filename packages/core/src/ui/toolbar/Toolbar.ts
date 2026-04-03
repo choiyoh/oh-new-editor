@@ -1,6 +1,5 @@
 import { redo, undo } from 'prosemirror-history';
-import type { Mark, NodeType } from 'prosemirror-model';
-import type { Command, EditorState } from 'prosemirror-state';
+import { NodeSelection, type Command, type EditorState } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 
 import {
@@ -8,6 +7,7 @@ import {
   insertCodeBlock,
   insertHR,
   insertParagraph,
+  setCodeBlockLanguage,
   setFontSize,
   setHeading,
   toggleBlockquote,
@@ -20,14 +20,16 @@ import {
   toggleStrike,
   toggleUnderline
 } from '../../commands';
-import { editorSchema } from '../../schema';
+import type { EditorToolbarAction } from '../../types';
 
 const DEFAULT_FONT_SIZES = [10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 64, 72];
+const DEFAULT_CODE_LANGUAGES = ['', 'plaintext', 'javascript', 'typescript', 'tsx', 'jsx', 'json', 'html', 'css', 'bash', 'markdown'];
 
 type ToolbarActionConfig = {
   label: string;
   title: string;
-  command: (view: EditorView) => boolean;
+  command: (view: EditorView) => boolean | Promise<boolean>;
+  isEnabled?: (state: EditorState) => boolean;
   isActive?: (state: EditorState) => boolean;
 };
 
@@ -35,8 +37,8 @@ function run(view: EditorView, command: Command) {
   return command(view.state, view.dispatch, view);
 }
 
-function hasMark(state: EditorState, markName: keyof typeof editorSchema.marks) {
-  const markType = editorSchema.marks[markName];
+function hasMark(state: EditorState, markName: string) {
+  const markType = state.schema.marks[markName];
   if (!markType) return false;
 
   const { from, to, empty } = state.selection;
@@ -47,35 +49,61 @@ function hasMark(state: EditorState, markName: keyof typeof editorSchema.marks) 
   return state.doc.rangeHasMark(from, to, markType);
 }
 
-function isBlockActive(state: EditorState, nodeType: NodeType, attrs?: Record<string, unknown>) {
-  const {$from} = state.selection;
+function isBlockActive(state: EditorState, nodeName: string, attrs?: Record<string, unknown>) {
+  const nodeType = state.schema.nodes[nodeName];
+  if (!nodeType) return false;
+
+  const { $from } = state.selection;
   for (let depth = $from.depth; depth >= 0; depth -= 1) {
     const node = $from.node(depth);
     if (node.type !== nodeType) continue;
     if (!attrs) return true;
     return Object.entries(attrs).every(([key, value]) => node.attrs[key] === value);
   }
+
   return false;
 }
 
 function getActiveFontSize(state: EditorState) {
-  const marks: readonly Mark[] = state.storedMarks ?? state.selection.$from.marks();
-  return marks.find((mark) => mark.type === editorSchema.marks.font_size)?.attrs.size ?? '';
+  const marks = state.storedMarks ?? state.selection.$from.marks();
+  const fontSize = state.schema.marks.font_size;
+  return fontSize ? marks.find((mark) => mark.type === fontSize)?.attrs.size ?? '' : '';
 }
 
 function getBlockValue(state: EditorState) {
-  const {$from} = state.selection;
+  const { $from } = state.selection;
   const parent = $from.parent;
 
-  if (parent.type === editorSchema.nodes.heading) {
+  if (parent.type === state.schema.nodes.heading) {
     return `h${parent.attrs.level}`;
   }
 
-  if (parent.type === editorSchema.nodes.code_block) {
+  if (parent.type === state.schema.nodes.code_block) {
     return 'code_block';
   }
 
   return 'paragraph';
+}
+
+function isImageSelected(state: EditorState) {
+  return state.selection instanceof NodeSelection && state.selection.node.type === state.schema.nodes.image;
+}
+
+function getActiveCodeLanguage(state: EditorState) {
+  const codeBlock = state.schema.nodes.code_block;
+  if (!codeBlock) return '';
+
+  const { $from } = state.selection;
+  for (let depth = $from.depth; depth >= 0; depth -= 1) {
+    const node = $from.node(depth);
+    if (node.type === codeBlock) return node.attrs.language ?? '';
+  }
+
+  return '';
+}
+
+function isInCodeBlock(state: EditorState) {
+  return getBlockValue(state) === 'code_block';
 }
 
 export class Toolbar {
@@ -84,17 +112,37 @@ export class Toolbar {
   private readonly actions = new Map<HTMLButtonElement, ToolbarActionConfig>();
   private readonly fontSizeSelect = document.createElement('select');
   private readonly blockSelect = document.createElement('select');
+  private readonly codeLanguageSelect = document.createElement('select');
+  private readonly insertActions: EditorToolbarAction[];
+  private readonly tableActions: EditorToolbarAction[];
+  private readonly onPickImage?: () => Promise<void>;
+  private readonly canUploadImages: boolean;
+  private readonly onEditImageAlt?: () => void;
   private readOnly = false;
 
   constructor(
     private readonly view: EditorView,
-    options: { fontSizes?: number[]; readOnly?: boolean } = {}
+    options: {
+      fontSizes?: number[];
+      readOnly?: boolean;
+      canUploadImages?: boolean;
+      onPickImage?: () => Promise<void>;
+      onEditImageAlt?: () => void;
+      insertActions?: EditorToolbarAction[];
+      tableActions?: EditorToolbarAction[];
+    } = {}
   ) {
     this.readOnly = Boolean(options.readOnly);
+    this.insertActions = options.insertActions ?? [];
+    this.tableActions = options.tableActions ?? [];
+    this.canUploadImages = Boolean(options.canUploadImages);
+    this.onPickImage = options.onPickImage;
+    this.onEditImageAlt = options.onEditImageAlt;
     this.element.className = 'oh-editor__toolbar';
 
     this.renderActions();
     this.renderBlockSelect();
+    this.renderCodeLanguageSelect();
     this.renderFontSizeSelect(options.fontSizes ?? DEFAULT_FONT_SIZES);
     this.sync();
   }
@@ -108,7 +156,9 @@ export class Toolbar {
     const { state } = this.view;
 
     for (const [button, config] of this.actions) {
-      button.disabled = this.readOnly;
+      const isImageButton = button.dataset.role === 'image';
+      const isAltButton = button.dataset.role === 'image-alt';
+      button.disabled = this.readOnly || (isImageButton && !this.canUploadImages) || (isAltButton && !isImageSelected(state)) || (config.isEnabled ? !config.isEnabled(state) : false) || button.dataset.busy === 'true';
       button.dataset.active = config.isActive?.(state) ? 'true' : 'false';
     }
 
@@ -117,6 +167,9 @@ export class Toolbar {
 
     this.fontSizeSelect.disabled = this.readOnly;
     this.fontSizeSelect.value = String(getActiveFontSize(state));
+
+    this.codeLanguageSelect.disabled = this.readOnly || !isInCodeBlock(state);
+    this.codeLanguageSelect.value = getActiveCodeLanguage(state);
   }
 
   destroy() {
@@ -146,30 +199,10 @@ export class Toolbar {
         }
       ],
       [
-        {
-          label: 'Quote',
-          title: 'Blockquote',
-          command: (view) => run(view, toggleBlockquote()),
-          isActive: (state) => isBlockActive(state, editorSchema.nodes.blockquote)
-        },
-        {
-          label: 'UL',
-          title: 'Bullet list',
-          command: (view) => run(view, toggleBulletList()),
-          isActive: (state) => isBlockActive(state, editorSchema.nodes.bullet_list)
-        },
-        {
-          label: 'OL',
-          title: 'Ordered list',
-          command: (view) => run(view, toggleOrderedList()),
-          isActive: (state) => isBlockActive(state, editorSchema.nodes.ordered_list)
-        },
-        {
-          label: 'Code',
-          title: 'Code block',
-          command: (view) => run(view, insertCodeBlock()),
-          isActive: (state) => isBlockActive(state, editorSchema.nodes.code_block)
-        },
+        { label: 'Quote', title: 'Blockquote', command: (view) => run(view, toggleBlockquote()), isActive: (state) => isBlockActive(state, 'blockquote') },
+        { label: 'UL', title: 'Bullet list', command: (view) => run(view, toggleBulletList()), isActive: (state) => isBlockActive(state, 'bullet_list') },
+        { label: 'OL', title: 'Ordered list', command: (view) => run(view, toggleOrderedList()), isActive: (state) => isBlockActive(state, 'ordered_list') },
+        { label: 'Code', title: 'Code block', command: (view) => run(view, insertCodeBlock()), isActive: (state) => isBlockActive(state, 'code_block') },
         { label: 'HR', title: 'Horizontal rule', command: (view) => run(view, insertHR()) }
       ],
       [
@@ -183,22 +216,86 @@ export class Toolbar {
       groupElement.className = 'oh-editor__toolbar-group';
 
       for (const config of group) {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'oh-editor__button';
-        button.textContent = config.label;
-        button.addEventListener('mousedown', (event) => {
-          event.preventDefault();
-          if (this.readOnly) return;
-          config.command(this.view);
-          this.view.focus();
-          this.sync();
-        });
-        this.actions.set(button, config);
-        groupElement.append(button);
+        this.appendActionButton(groupElement, config);
       }
 
       this.element.append(groupElement);
+    }
+
+    const insertGroup = document.createElement('div');
+    insertGroup.className = 'oh-editor__toolbar-group';
+
+    const imageButton = document.createElement('button');
+    imageButton.type = 'button';
+    imageButton.className = 'oh-editor__button';
+    imageButton.textContent = 'Image';
+    imageButton.title = 'Upload image';
+    imageButton.setAttribute('aria-label', 'Upload image');
+    imageButton.dataset.role = 'image';
+    imageButton.addEventListener('mousedown', (event) => {
+      event.preventDefault();
+      if (this.readOnly || !this.onPickImage) return;
+      imageButton.dataset.busy = 'true';
+      this.sync();
+      void this.onPickImage().finally(() => {
+        imageButton.dataset.busy = 'false';
+        this.view.focus();
+        this.sync();
+      });
+    });
+    this.actions.set(imageButton, {
+      label: 'Image',
+      title: 'Upload image',
+      command: () => true
+    });
+    insertGroup.append(imageButton);
+
+    const altButton = document.createElement('button');
+    altButton.type = 'button';
+    altButton.className = 'oh-editor__button';
+    altButton.textContent = 'Alt';
+    altButton.title = 'Edit image alt text';
+    altButton.setAttribute('aria-label', 'Edit image alt text');
+    altButton.dataset.role = 'image-alt';
+    altButton.addEventListener('mousedown', (event) => {
+      event.preventDefault();
+      if (this.readOnly || !this.onEditImageAlt || !isImageSelected(this.view.state)) return;
+      this.onEditImageAlt();
+      this.view.focus();
+      this.sync();
+    });
+    this.actions.set(altButton, {
+      label: 'Alt',
+      title: 'Edit image alt text',
+      command: () => true
+    });
+    insertGroup.append(altButton);
+
+    for (const action of this.insertActions) {
+      this.appendActionButton(insertGroup, {
+        label: action.label,
+        title: action.title,
+        command: action.run,
+        isEnabled: action.isEnabled,
+        isActive: action.isActive
+      });
+    }
+
+    this.element.append(insertGroup);
+
+    if (this.tableActions.length) {
+      const tableGroup = document.createElement('div');
+      tableGroup.className = 'oh-editor__toolbar-group';
+      for (const action of this.tableActions) {
+        this.appendActionButton(tableGroup, {
+          label: action.label,
+          title: action.title,
+          command: action.run,
+          isEnabled: action.isEnabled,
+          isActive: action.isActive
+        });
+      }
+      this.element.append(tableGroup);
     }
   }
 
@@ -223,6 +320,8 @@ export class Toolbar {
     }
 
     this.blockSelect.className = 'oh-editor__select';
+    this.blockSelect.title = 'Block type';
+    this.blockSelect.setAttribute('aria-label', 'Block type');
     this.blockSelect.addEventListener('change', () => {
       if (this.readOnly) return;
       const value = this.blockSelect.value;
@@ -233,7 +332,6 @@ export class Toolbar {
           : setHeading(Number(value.slice(1)) as 1 | 2 | 3 | 4 | 5 | 6);
 
       run(this.view, command);
-
       this.view.focus();
       this.sync();
     });
@@ -259,6 +357,8 @@ export class Toolbar {
     }
 
     this.fontSizeSelect.className = 'oh-editor__select';
+    this.fontSizeSelect.title = 'Font size';
+    this.fontSizeSelect.setAttribute('aria-label', 'Font size');
     this.fontSizeSelect.addEventListener('change', () => {
       if (this.readOnly) return;
       const value = this.fontSizeSelect.value;
@@ -270,5 +370,60 @@ export class Toolbar {
 
     group.append(this.fontSizeSelect);
     this.element.prepend(group);
+  }
+
+  private renderCodeLanguageSelect() {
+    const group = document.createElement('div');
+    group.className = 'oh-editor__toolbar-group';
+
+    for (const language of DEFAULT_CODE_LANGUAGES) {
+      const option = document.createElement('option');
+      option.value = language;
+      option.textContent = language || 'Code lang';
+      this.codeLanguageSelect.append(option);
+    }
+
+    this.codeLanguageSelect.className = 'oh-editor__select';
+    this.codeLanguageSelect.title = 'Code block language';
+    this.codeLanguageSelect.setAttribute('aria-label', 'Code block language');
+    this.codeLanguageSelect.addEventListener('change', () => {
+      if (this.readOnly || !isInCodeBlock(this.view.state)) return;
+      run(this.view, setCodeBlockLanguage(this.codeLanguageSelect.value || null));
+      this.view.focus();
+      this.sync();
+    });
+
+    group.append(this.codeLanguageSelect);
+    this.element.prepend(group);
+  }
+
+  private appendActionButton(group: HTMLElement, config: ToolbarActionConfig) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'oh-editor__button';
+    button.textContent = config.label;
+    button.title = config.title;
+    button.setAttribute('aria-label', config.title);
+    button.addEventListener('mousedown', (event) => {
+      event.preventDefault();
+      if (this.readOnly) return;
+
+      const result = config.command(this.view);
+      if (result instanceof Promise) {
+        button.dataset.busy = 'true';
+        this.sync();
+        void result.finally(() => {
+          button.dataset.busy = 'false';
+          this.view.focus();
+          this.sync();
+        });
+        return;
+      }
+
+      this.view.focus();
+      this.sync();
+    });
+    this.actions.set(button, config);
+    group.append(button);
   }
 }

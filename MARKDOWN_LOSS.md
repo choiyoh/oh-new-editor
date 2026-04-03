@@ -1,6 +1,6 @@
 # Markdown Loss Matrix
 
-`@oh-new-editor/core` keeps ProseMirror as the source of truth. Markdown output is a serialized view and can be lossy.
+`@oh-new-editor/core` keeps ProseMirror as the source of truth. Markdown support is now opt-in via `@oh-new-editor/core/markdown`, and markdown output is a serialized view that can be lossy.
 
 | Feature | Markdown output | Notes |
 |---|---|---|

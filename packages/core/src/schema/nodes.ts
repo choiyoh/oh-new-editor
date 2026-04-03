@@ -1,7 +1,6 @@
 import type { NodeSpec, SchemaSpec } from 'prosemirror-model';
 import { schema as basicSchema } from 'prosemirror-schema-basic';
 import { addListNodes } from 'prosemirror-schema-list';
-import { tableNodes } from 'prosemirror-tables';
 
 const baseCodeBlock = basicSchema.spec.nodes.get('code_block');
 const baseImage = basicSchema.spec.nodes.get('image');
@@ -83,23 +82,4 @@ const image: NodeSpec = {
 
 export const nodes: SchemaSpec<any, any>['nodes'] = addListNodes(basicSchema.spec.nodes, 'paragraph block*', 'block')
   .update('code_block', codeBlock)
-  .update('image', image)
-  .append(
-    tableNodes({
-      tableGroup: 'block',
-      cellContent: 'block+',
-      cellAttributes: {
-        background: {
-          default: null,
-          getFromDOM(domNode) {
-            return domNode instanceof HTMLElement ? domNode.style.backgroundColor || null : null;
-          },
-          setDOMAttr(value, attrs) {
-            if (value) {
-              attrs.style = `${attrs.style ?? ''}background-color: ${value};`;
-            }
-          }
-        }
-      }
-    })
-  );
+  .update('image', image);

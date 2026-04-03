@@ -2,10 +2,19 @@
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",
+    "ignoreDeprecations": "6.0",
     "moduleResolution": "bundler",
+    "baseUrl": ".",
+    "paths": {
+      "@oh-new-editor/core": ["../../packages/core/src/index.ts"],
+      "@oh-new-editor/core/markdown": ["../../packages/core/src/markdown.ts"],
+      "@oh-new-editor/core/notion": ["../../packages/core/src/notion.ts"],
+      "@oh-new-editor/core/table": ["../../packages/core/src/table.ts"],
+      "@oh-new-editor/core/toolbar": ["../../packages/core/src/toolbar.ts"]
+    },
     "strict": true,
     "skipLibCheck": true,
     "lib": ["DOM", "DOM.Iterable", "ES2022"]
   },
-  "include": ["src"]
+  "include": ["src", "../../packages/core/src/turndown.d.ts"]
 }

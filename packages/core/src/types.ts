@@ -33,12 +33,73 @@ export type EditorPlugin = Plugin;
 export type EditorSchema = Schema;
 export type EditorViewInstance = EditorView;
 
+export interface EditorImageOptions {
+  upload: (file: File) => Promise<string>;
+  maxSize?: number;
+  accept?: string[];
+}
+
+export interface EditorMarkdownSupport {
+  parse: (content?: string) => EditorDocument;
+  serialize: (doc: EditorDocument) => string;
+}
+
+export interface EditorToolbarAction {
+  label: string;
+  title: string;
+  run: (view: EditorView) => boolean | Promise<boolean>;
+  isEnabled?: (state: EditorState) => boolean;
+  isActive?: (state: EditorState) => boolean;
+}
+
+export interface EditorMenuController {
+  element: HTMLElement;
+  open(left: number, top: number): void;
+  close(): void;
+  sync(): void;
+  contains(target: EventTarget | null): boolean;
+  destroy(): void;
+}
+
+export interface EditorTableSupport {
+  schema: EditorSchema;
+  plugins: EditorPlugin[];
+  maxRows?: number;
+  maxCols?: number;
+  insertActions?: EditorToolbarAction[];
+  actions?: EditorToolbarAction[];
+  createMenu?: (view: EditorView) => EditorMenuController;
+}
+
+export interface EditorToolbarController {
+  element: HTMLElement;
+  setReadOnly(readOnly: boolean): void;
+  sync(): void;
+  destroy(): void;
+}
+
+export interface EditorToolbarSupport {
+  createToolbar(view: EditorView, options: {
+    fontSizes?: number[];
+    readOnly?: boolean;
+    canUploadImages?: boolean;
+    onPickImage?: () => Promise<void>;
+    onEditImageAlt?: () => void;
+    insertActions?: EditorToolbarAction[];
+    tableActions?: EditorToolbarAction[];
+  }): EditorToolbarController;
+}
+
 export interface EditorOptions {
   initialContent?: string;
   outputFormat?: 'html' | 'markdown';
+  markdown?: EditorMarkdownSupport;
+  table?: EditorTableSupport;
+  toolbar?: EditorToolbarSupport;
   style?: 'toolbar' | 'notion';
   fontSizes?: number[];
   placeholder?: string;
+  image?: EditorImageOptions;
   readOnly?: boolean;
 }
 

@@ -1,0 +1,52 @@
+{
+  "name": "@oh-new-editor/react",
+  "version": "0.1.0",
+  "description": "React adapter for Oh New Editor",
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yohan/oh-new-editor.git",
+    "directory": "packages/react"
+  },
+  "homepage": "https://github.com/yohan/oh-new-editor",
+  "bugs": {
+    "url": "https://github.com/yohan/oh-new-editor/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "scripts": {
+    "build": "rm -rf dist && vite build",
+    "dev": "vite build --watch",
+    "typecheck": "tsc --project tsconfig.json --noEmit"
+  },
+  "peerDependencies": {
+    "@oh-new-editor/core": "workspace:*",
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "dependencies": {
+    "@oh-new-editor/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "vite": "^7.1.9",
+    "vite-plugin-dts": "^4.5.4"
+  }
+}

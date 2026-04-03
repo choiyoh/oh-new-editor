@@ -3,20 +3,57 @@
   "version": "0.1.0",
   "description": "Core engine for Oh New Editor",
   "type": "module",
+  "files": [
+    "dist"
+  ],
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
   "types": "./dist/src/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yohan/oh-new-editor.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/yohan/oh-new-editor",
+  "bugs": {
+    "url": "https://github.com/yohan/oh-new-editor/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "exports": {
     ".": {
       "types": "./dist/src/index.d.ts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
     },
+    "./markdown": {
+      "types": "./dist/src/markdown.d.ts",
+      "import": "./dist/markdown.mjs",
+      "require": "./dist/markdown.cjs"
+    },
+    "./notion": {
+      "types": "./dist/src/notion.d.ts",
+      "import": "./dist/notion.mjs",
+      "require": "./dist/notion.cjs"
+    },
+    "./table": {
+      "types": "./dist/src/table.d.ts",
+      "import": "./dist/table.mjs",
+      "require": "./dist/table.cjs"
+    },
+    "./toolbar": {
+      "types": "./dist/src/toolbar.d.ts",
+      "import": "./dist/toolbar.mjs",
+      "require": "./dist/toolbar.cjs"
+    },
     "./style.css": "./dist/style.css"
   },
   "scripts": {
-    "build": "vite build",
+    "build": "rm -rf dist && vite build",
     "dev": "vite build --watch",
+    "size-check": "node ../../scripts/check-size.mjs",
+    "test": "vitest run",
     "typecheck": "tsc --project tsconfig.json --noEmit"
   },
   "keywords": [],
@@ -38,11 +75,12 @@
     "prosemirror-tables": "^1.8.1",
     "prosemirror-transform": "^1.10.4",
     "prosemirror-view": "^1.41.3",
-    "shiki": "^3.13.0",
     "turndown": "^7.2.1"
   },
   "devDependencies": {
     "vite": "^7.1.9",
-    "vite-plugin-dts": "^4.5.4"
+    "vite-plugin-dts": "^4.5.4",
+    "vitest": "^3.2.4",
+    "jsdom": "^26.1.0"
   }
 }

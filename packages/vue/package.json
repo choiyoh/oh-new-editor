@@ -1,0 +1,48 @@
+{
+  "name": "@oh-new-editor/vue",
+  "version": "0.1.0",
+  "description": "Vue adapter for Oh New Editor",
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yohan/oh-new-editor.git",
+    "directory": "packages/vue"
+  },
+  "homepage": "https://github.com/yohan/oh-new-editor",
+  "bugs": {
+    "url": "https://github.com/yohan/oh-new-editor/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "scripts": {
+    "build": "rm -rf dist && vite build",
+    "dev": "vite build --watch",
+    "typecheck": "tsc --project tsconfig.json --noEmit"
+  },
+  "peerDependencies": {
+    "@oh-new-editor/core": "workspace:*",
+    "vue": ">=3"
+  },
+  "dependencies": {
+    "@oh-new-editor/core": "workspace:*"
+  },
+  "devDependencies": {
+    "vite": "^7.1.9",
+    "vite-plugin-dts": "^4.5.4",
+    "vue": "^3.5.22"
+  }
+}

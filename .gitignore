@@ -5,3 +5,4 @@ node_modules
 .omx/
 AGENTS.md
 dist/
+.turbo/
