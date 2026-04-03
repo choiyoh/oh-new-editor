@@ -1,0 +1,20 @@
+{
+  "name": "oh-new-editor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Framework-agnostic monorepo for Oh New Editor",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "typecheck": "turbo run typecheck"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "packageManager": "pnpm@10.33.0",
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "turbo": "^2.5.6",
+    "typescript": "^6.0.2"
+  }
+}

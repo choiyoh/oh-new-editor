@@ -1,0 +1,13 @@
+
+> @oh-new-editor/playground@0.1.0 build /Users/yohan/Documents/workspace/oh-new-editor/apps/playground
+> vite build
+
+vite v7.3.1 building client environment for production...
+transforming...
+✓ 5 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.41 kB │ gzip:   0.27 kB
+dist/assets/index-D-Ednklt.css    1.86 kB │ gzip:   0.74 kB
+dist/assets/index-DKdFvcFj.js   317.45 kB │ gzip: 100.81 kB
+✓ built in 468ms

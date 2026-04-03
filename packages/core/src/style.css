@@ -1,0 +1,120 @@
+:root {
+  color-scheme: light dark;
+}
+
+.oh-editor {
+  border: 1px solid #d0d7de;
+  border-radius: 12px;
+  background: #ffffff;
+  min-height: 240px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.oh-editor:focus-within {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.18);
+}
+
+.oh-editor__toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 12px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f8fafc;
+}
+
+.oh-editor__toolbar-group {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.oh-editor__toolbar-group + .oh-editor__toolbar-group {
+  position: relative;
+  padding-left: 10px;
+}
+
+.oh-editor__toolbar-group + .oh-editor__toolbar-group::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 1px;
+  background: #e2e8f0;
+}
+
+.oh-editor__button,
+.oh-editor__select {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #0f172a;
+  font: 500 13px/1 system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.oh-editor__button {
+  min-width: 36px;
+  height: 36px;
+  padding: 0 10px;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.oh-editor__button:hover:not(:disabled),
+.oh-editor__select:hover:not(:disabled) {
+  border-color: #94a3b8;
+}
+
+.oh-editor__button:focus-visible,
+.oh-editor__select:focus-visible {
+  outline: 2px solid #60a5fa;
+  outline-offset: 1px;
+}
+
+.oh-editor__button[data-active='true'] {
+  background: #dbeafe;
+  border-color: #60a5fa;
+  color: #1d4ed8;
+}
+
+.oh-editor__button:disabled,
+.oh-editor__select:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.oh-editor__select {
+  height: 36px;
+  padding: 0 10px;
+}
+
+.oh-editor__content {
+  min-height: 240px;
+}
+
+.oh-editor__placeholder {
+  position: absolute;
+  color: #94a3b8;
+  pointer-events: none;
+  user-select: none;
+}
+
+.oh-editor .ProseMirror {
+  position: relative;
+  min-height: 240px;
+  padding: 16px;
+  outline: none;
+  font: 16px/1.6 system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: #111827;
+}
+
+.oh-editor .ProseMirror p {
+  margin: 0;
+}

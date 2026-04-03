@@ -1,0 +1,20 @@
+
+> @oh-new-editor/core@0.1.0 build /Users/yohan/Documents/workspace/oh-new-editor/packages/core
+> vite build
+
+vite v7.3.1 building client environment for production...
+transforming...
+✓ 35 modules transformed.
+rendering chunks...
+
+[vite:dts] Start generate declaration files...
+computing gzip size...
+[vite:dts] Declaration files built in 505ms.
+
+dist/style.css    1.86 kB │ gzip:   0.74 kB
+dist/index.mjs  479.15 kB │ gzip: 131.62 kB │ map: 1,374.51 kB
+dist/style.css    1.86 kB │ gzip:   0.74 kB
+dist/index.cjs  317.52 kB │ gzip: 100.66 kB │ map: 1,338.65 kB
+dist/style.css        1.86 kB │ gzip:   0.74 kB
+dist/index.iife.js  317.44 kB │ gzip: 100.66 kB │ map: 1,338.61 kB
+✓ built in 1.39s

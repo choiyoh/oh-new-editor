@@ -1,0 +1,4 @@
+
+> @oh-new-editor/playground@0.1.0 typecheck /Users/yohan/Documents/workspace/oh-new-editor/apps/playground
+> tsc --project tsconfig.json --noEmit
+

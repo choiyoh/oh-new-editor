@@ -1,0 +1,17 @@
+{
+  "name": "@oh-new-editor/playground",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite",
+    "typecheck": "tsc --project tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@oh-new-editor/core": "workspace:*"
+  },
+  "devDependencies": {
+    "vite": "^7.1.9"
+  }
+}

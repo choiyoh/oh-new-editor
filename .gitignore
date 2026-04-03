@@ -1,0 +1,7 @@
+node_modules
+
+.claude/
+.omc/
+.omx/
+AGENTS.md
+dist/

@@ -1,0 +1,4 @@
+
+> @oh-new-editor/core@0.1.0 typecheck /Users/yohan/Documents/workspace/oh-new-editor/packages/core
+> tsc --project tsconfig.json --noEmit
+
