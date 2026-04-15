@@ -1,3 +1,4 @@
+import { NodeSelection } from 'prosemirror-state';
 import type { EditorState } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 
@@ -23,13 +24,17 @@ import { toolbarIcons } from '../icons';
 type NotionUiOptions = {
   readOnly?: boolean;
   onPickImage?: () => Promise<void>;
+  onEditImageAlt?: () => void;
   insertActions?: EditorToolbarAction[];
 };
+
+type SlashCategory = 'Basic' | 'Media' | 'Advanced';
 
 type SlashItem = {
   icon: string;
   label: string;
   description?: string;
+  category: SlashCategory;
   keywords: string[];
   run: () => unknown;
 };
@@ -81,6 +86,17 @@ function isBlockActive(state: EditorState, nodeName: string, attrs?: Record<stri
   return false;
 }
 
+function isImageSelected(state: EditorState) {
+  return state.selection instanceof NodeSelection && state.selection.node.type === state.schema.nodes.image;
+}
+
+function isLinkAtCursor(state: EditorState) {
+  const { from, empty } = state.selection;
+  if (!empty) return false;
+  const marks = state.storedMarks ?? state.selection.$from.marks();
+  return Boolean(state.schema.marks.link?.isInSet(marks));
+}
+
 export class NotionUi implements EditorToolbarController {
   readonly element = document.createElement('div');
 
@@ -91,6 +107,7 @@ export class NotionUi implements EditorToolbarController {
   private readonly slashItems: SlashItem[];
   private selectedSlashIndex = 0;
   private readOnly = false;
+  private readonly onEditImageAlt?: () => void;
 
   private getOverlayRect() {
     return (this.element.parentElement ?? this.view.dom.parentElement ?? document.body).getBoundingClientRect();
@@ -123,6 +140,7 @@ export class NotionUi implements EditorToolbarController {
     options: NotionUiOptions = {}
   ) {
     this.readOnly = Boolean(options.readOnly);
+    this.onEditImageAlt = options.onEditImageAlt;
     this.element.className = 'oh-editor__notion-ui';
 
     this.bubble.className = 'oh-editor__bubble-toolbar';
@@ -218,30 +236,53 @@ export class NotionUi implements EditorToolbarController {
     }
   };
 
-  private renderBubble() {
-    const actions = [
-      [toolbarIcons.bold, 'Bold', () => run(this.view, toggleBold()), () => hasMark(this.view.state, 'strong')],
-      [toolbarIcons.italic, 'Italic', () => run(this.view, toggleItalic()), () => hasMark(this.view.state, 'em')],
-      [toolbarIcons.underline, 'Underline', () => run(this.view, toggleUnderline()), () => hasMark(this.view.state, 'underline')],
-      [toolbarIcons.strike, 'Strikethrough', () => run(this.view, toggleStrike()), () => hasMark(this.view.state, 'strike')],
-      [toolbarIcons.inlineCode, 'Inline code', () => run(this.view, toggleCode()), () => hasMark(this.view.state, 'code')],
-      [toolbarIcons.bulletList, 'Bullet list', () => run(this.view, toggleBulletList()), () => isBlockActive(this.view.state, 'bullet_list')],
-      [toolbarIcons.orderedList, 'Ordered list', () => run(this.view, toggleOrderedList()), () => isBlockActive(this.view.state, 'ordered_list')],
-      [toolbarIcons.quote, 'Blockquote', () => run(this.view, toggleBlockquote()), () => isBlockActive(this.view.state, 'blockquote')],
-      [toolbarIcons.link, 'Link', () => {
-        const href = window.prompt('Enter URL', 'https://');
-        if (!href) return false;
-        return run(this.view, toggleLink(href));
-      }, () => hasMark(this.view.state, 'link')]
-    ] as const;
+  private bubbleActions: {
+    icon: string;
+    title: string;
+    action: () => unknown;
+    isActive: () => boolean;
+    context: 'text' | 'image' | 'link';
+  }[] = [];
 
-    for (const [icon, title, action, isActive] of actions) {
+  private renderBubble() {
+    this.bubbleActions = [
+      { icon: toolbarIcons.bold, title: 'Bold', action: () => run(this.view, toggleBold()), isActive: () => hasMark(this.view.state, 'strong'), context: 'text' },
+      { icon: toolbarIcons.italic, title: 'Italic', action: () => run(this.view, toggleItalic()), isActive: () => hasMark(this.view.state, 'em'), context: 'text' },
+      { icon: toolbarIcons.underline, title: 'Underline', action: () => run(this.view, toggleUnderline()), isActive: () => hasMark(this.view.state, 'underline'), context: 'text' },
+      { icon: toolbarIcons.strike, title: 'Strikethrough', action: () => run(this.view, toggleStrike()), isActive: () => hasMark(this.view.state, 'strike'), context: 'text' },
+      { icon: toolbarIcons.inlineCode, title: 'Inline code', action: () => run(this.view, toggleCode()), isActive: () => hasMark(this.view.state, 'code'), context: 'text' },
+      { icon: toolbarIcons.link, title: 'Link', action: () => { const href = window.prompt('Enter URL', 'https://'); if (!href) return false; return run(this.view, toggleLink(href)); }, isActive: () => hasMark(this.view.state, 'link'), context: 'text' },
+      { icon: toolbarIcons.bulletList, title: 'Bullet list', action: () => run(this.view, toggleBulletList()), isActive: () => isBlockActive(this.view.state, 'bullet_list'), context: 'text' },
+      { icon: toolbarIcons.orderedList, title: 'Ordered list', action: () => run(this.view, toggleOrderedList()), isActive: () => isBlockActive(this.view.state, 'ordered_list'), context: 'text' },
+      { icon: toolbarIcons.quote, title: 'Blockquote', action: () => run(this.view, toggleBlockquote()), isActive: () => isBlockActive(this.view.state, 'blockquote'), context: 'text' },
+      { icon: toolbarIcons.alt, title: 'Edit alt text', action: () => { this.onEditImageAlt?.(); }, isActive: () => false, context: 'image' }
+    ];
+  }
+
+  private getBubbleContext(): 'text' | 'image' | 'link' {
+    if (isImageSelected(this.view.state)) return 'image';
+    if (isLinkAtCursor(this.view.state)) return 'link';
+    return 'text';
+  }
+
+  private rebuildBubble() {
+    const context = this.getBubbleContext();
+    this.bubble.replaceChildren();
+
+    const visible = this.bubbleActions.filter((a) => {
+      if (context === 'image') return a.context === 'image';
+      if (context === 'link') return a.context === 'text';
+      return a.context === 'text';
+    });
+
+    for (const { icon, title, action, isActive } of visible) {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'oh-editor__button';
       button.innerHTML = icon;
       button.title = title;
       button.setAttribute('aria-label', title);
+      button.dataset.active = isActive() ? 'true' : 'false';
       button.addEventListener('mousedown', (event) => {
         event.preventDefault();
         if (this.readOnly) return;
@@ -249,7 +290,6 @@ export class NotionUi implements EditorToolbarController {
         this.view.focus();
         this.sync();
       });
-      button.dataset.active = isActive() ? 'true' : 'false';
       this.bubble.append(button);
     }
   }
@@ -262,21 +302,10 @@ export class NotionUi implements EditorToolbarController {
       return;
     }
 
+    this.rebuildBubble();
+
     const start = this.view.coordsAtPos(selection.from);
     const end = this.view.coordsAtPos(selection.to);
-    for (const button of this.bubble.querySelectorAll<HTMLButtonElement>('.oh-editor__button')) {
-      const title = button.getAttribute('aria-label');
-      button.dataset.active = title === 'Bold' ? String(hasMark(this.view.state, 'strong'))
-        : title === 'Italic' ? String(hasMark(this.view.state, 'em'))
-        : title === 'Underline' ? String(hasMark(this.view.state, 'underline'))
-        : title === 'Strikethrough' ? String(hasMark(this.view.state, 'strike'))
-        : title === 'Inline code' ? String(hasMark(this.view.state, 'code'))
-        : title === 'Bullet list' ? String(isBlockActive(this.view.state, 'bullet_list'))
-        : title === 'Ordered list' ? String(isBlockActive(this.view.state, 'ordered_list'))
-        : title === 'Blockquote' ? String(isBlockActive(this.view.state, 'blockquote'))
-        : title === 'Link' ? String(hasMark(this.view.state, 'link'))
-        : 'false';
-    }
     this.bubble.hidden = false;
     this.placeOverlay(this.bubble, {
       left: (start.left + end.right) / 2,
@@ -321,19 +350,19 @@ export class NotionUi implements EditorToolbarController {
 
   private createSlashItems(options: NotionUiOptions): SlashItem[] {
     const items: SlashItem[] = [
-      { icon: toolbarIcons.paragraph, label: 'Text', description: 'Start writing with a plain paragraph', keywords: ['paragraph', 'text'], run: () => run(this.view, insertParagraph()) },
-      { icon: toolbarIcons.heading1, label: 'Heading 1', description: 'Large section heading', keywords: ['h1', 'heading', 'title'], run: () => run(this.view, setHeading(1)) },
-      { icon: toolbarIcons.heading2, label: 'Heading 2', description: 'Medium section heading', keywords: ['h2', 'heading', 'subtitle'], run: () => run(this.view, setHeading(2)) },
-      { icon: toolbarIcons.heading3, label: 'Heading 3', description: 'Small section heading', keywords: ['h3', 'heading'], run: () => run(this.view, setHeading(3)) },
-      { icon: toolbarIcons.bulletList, label: 'Bullet List', description: 'Create an unordered list', keywords: ['list', 'bullet'], run: () => run(this.view, toggleBulletList()) },
-      { icon: toolbarIcons.orderedList, label: 'Ordered List', description: 'Create a numbered list', keywords: ['list', 'ordered', 'number'], run: () => run(this.view, toggleOrderedList()) },
-      { icon: toolbarIcons.quote, label: 'Blockquote', description: 'Highlight a quoted passage', keywords: ['quote'], run: () => run(this.view, toggleBlockquote()) },
-      { icon: toolbarIcons.codeBlock, label: 'Code Block', description: 'Insert a fenced code block', keywords: ['code', 'snippet'], run: () => run(this.view, insertCodeBlock()) },
-      { icon: toolbarIcons.divider, label: 'Divider', description: 'Insert a horizontal divider', keywords: ['hr', 'divider', 'separator'], run: () => run(this.view, insertHR()) }
+      { icon: toolbarIcons.paragraph, label: 'Text', description: 'Start writing with a plain paragraph', category: 'Basic', keywords: ['paragraph', 'text'], run: () => run(this.view, insertParagraph()) },
+      { icon: toolbarIcons.heading1, label: 'Heading 1', description: 'Large section heading', category: 'Basic', keywords: ['h1', 'heading', 'title'], run: () => run(this.view, setHeading(1)) },
+      { icon: toolbarIcons.heading2, label: 'Heading 2', description: 'Medium section heading', category: 'Basic', keywords: ['h2', 'heading', 'subtitle'], run: () => run(this.view, setHeading(2)) },
+      { icon: toolbarIcons.heading3, label: 'Heading 3', description: 'Small section heading', category: 'Basic', keywords: ['h3', 'heading'], run: () => run(this.view, setHeading(3)) },
+      { icon: toolbarIcons.bulletList, label: 'Bullet List', description: 'Create an unordered list', category: 'Basic', keywords: ['list', 'bullet'], run: () => run(this.view, toggleBulletList()) },
+      { icon: toolbarIcons.orderedList, label: 'Ordered List', description: 'Create a numbered list', category: 'Basic', keywords: ['list', 'ordered', 'number'], run: () => run(this.view, toggleOrderedList()) },
+      { icon: toolbarIcons.quote, label: 'Blockquote', description: 'Highlight a quoted passage', category: 'Basic', keywords: ['quote'], run: () => run(this.view, toggleBlockquote()) },
+      { icon: toolbarIcons.codeBlock, label: 'Code Block', description: 'Insert a fenced code block', category: 'Advanced', keywords: ['code', 'snippet'], run: () => run(this.view, insertCodeBlock()) },
+      { icon: toolbarIcons.divider, label: 'Divider', description: 'Insert a horizontal divider', category: 'Advanced', keywords: ['hr', 'divider', 'separator'], run: () => run(this.view, insertHR()) }
     ];
 
     if (options.onPickImage) {
-      items.push({ icon: toolbarIcons.image, label: 'Image', description: 'Upload an image from your device', keywords: ['image', 'upload', 'media'], run: () => options.onPickImage?.() });
+      items.push({ icon: toolbarIcons.image, label: 'Image', description: 'Upload an image from your device', category: 'Media', keywords: ['image', 'upload', 'media'], run: () => options.onPickImage?.() });
     }
 
     for (const action of options.insertActions ?? []) {
@@ -341,6 +370,7 @@ export class NotionUi implements EditorToolbarController {
         icon: action.label,
         label: action.title,
         description: action.title,
+        category: 'Advanced',
         keywords: [action.title.toLowerCase()],
         run: () => action.run(this.view)
       });
@@ -381,7 +411,17 @@ export class NotionUi implements EditorToolbarController {
     const visibleItems = this.getVisibleSlashItems();
     this.slashList.replaceChildren();
 
+    let lastCategory = '';
+
     visibleItems.forEach((item, index) => {
+      if (item.category !== lastCategory) {
+        lastCategory = item.category;
+        const header = document.createElement('div');
+        header.className = 'oh-editor__slash-category';
+        header.textContent = item.category;
+        this.slashList.append(header);
+      }
+
       const button = document.createElement('button');
       const icon = document.createElement('span');
       const copy = document.createElement('span');

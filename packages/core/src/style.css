@@ -597,3 +597,16 @@ html[data-theme='dark'] .oh-editor__select {
   color: var(--oh-editor-text-soft);
   font-size: 12px;
 }
+
+.oh-editor__slash-category {
+  padding: 8px 10px 4px;
+  color: var(--oh-editor-text-muted);
+  font: 600 11px/1 system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  user-select: none;
+}
+
+.oh-editor__slash-category:first-child {
+  padding-top: 4px;
+}
