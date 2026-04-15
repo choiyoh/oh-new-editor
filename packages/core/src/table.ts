@@ -16,6 +16,7 @@ import { insertTable } from './commands';
 import { createEditor } from './editor';
 import { createEditorSchema } from './schema';
 import { tableEnabledNodes } from './schema/tableNodes';
+import { toolbarIcons } from './ui/icons';
 import { TableMenu } from './ui/menus/TableMenu';
 import type { Editor, EditorOptions, EditorTableSupport, EditorToolbarAction } from './types';
 
@@ -31,7 +32,7 @@ function getTableSize(state: Parameters<NonNullable<EditorToolbarAction['isEnabl
 export function createTableSupport(options: { maxRows?: number; maxCols?: number } = {}): EditorTableSupport {
   const insertActions: EditorToolbarAction[] = [
     {
-      label: 'Table',
+      label: toolbarIcons.table,
       title: 'Insert table',
       run: (view) => insertTable(3, 3, options)(view.state, view.dispatch, view)
     }
@@ -39,7 +40,7 @@ export function createTableSupport(options: { maxRows?: number; maxCols?: number
 
   const tableActions: EditorToolbarAction[] = [
     {
-      label: '+Row',
+      label: toolbarIcons.addRow,
       title: 'Add row after',
       run: (view) => addRowAfter(view.state, view.dispatch),
       isEnabled: (state) => {
@@ -48,7 +49,7 @@ export function createTableSupport(options: { maxRows?: number; maxCols?: number
       }
     },
     {
-      label: '+Col',
+      label: toolbarIcons.addColumn,
       title: 'Add column after',
       run: (view) => addColumnAfter(view.state, view.dispatch),
       isEnabled: (state) => {
@@ -57,25 +58,25 @@ export function createTableSupport(options: { maxRows?: number; maxCols?: number
       }
     },
     {
-      label: '-Row',
+      label: toolbarIcons.removeRow,
       title: 'Delete row',
       run: (view) => deleteRow(view.state, view.dispatch),
       isEnabled: (state) => isInTable(state)
     },
     {
-      label: '-Col',
+      label: toolbarIcons.removeColumn,
       title: 'Delete column',
       run: (view) => deleteColumn(view.state, view.dispatch),
       isEnabled: (state) => isInTable(state)
     },
     {
-      label: 'Merge',
+      label: toolbarIcons.merge,
       title: 'Merge selected cells',
       run: (view) => mergeCells(view.state, view.dispatch),
       isEnabled: (state) => isInTable(state) && mergeCells(state)
     },
     {
-      label: 'Split',
+      label: toolbarIcons.split,
       title: 'Split merged cell',
       run: (view) => splitCell(view.state, view.dispatch),
       isEnabled: (state) => isInTable(state) && splitCell(state)

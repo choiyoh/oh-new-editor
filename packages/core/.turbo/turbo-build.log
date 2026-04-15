@@ -1,20 +1,30 @@
 
 > @oh-new-editor/core@0.1.0 build /Users/yohan/Documents/workspace/oh-new-editor/packages/core
-> vite build
+> rm -rf dist && vite build
 
 vite v7.3.1 building client environment for production...
 transforming...
-✓ 35 modules transformed.
+✓ 45 modules transformed.
 rendering chunks...
 
 [vite:dts] Start generate declaration files...
 computing gzip size...
-[vite:dts] Declaration files built in 505ms.
+dist/style.css           12.08 kB │ gzip:   2.84 kB
+dist/index.mjs            0.82 kB │ gzip:   0.43 kB │ map:     0.09 kB
+dist/icons-BZw2UOWU.js    3.34 kB │ gzip:   1.51 kB │ map:     5.04 kB
+dist/notion.mjs           8.93 kB │ gzip:   2.68 kB │ map:    21.40 kB
+dist/toolbar.mjs         10.71 kB │ gzip:   2.84 kB │ map:    26.67 kB
+dist/table.mjs           53.37 kB │ gzip:  14.56 kB │ map:   176.66 kB
+dist/markdown.mjs        69.28 kB │ gzip:  18.67 kB │ map:   140.38 kB
+dist/index-CkfTys6y.js  398.92 kB │ gzip: 110.06 kB │ map: 1,134.03 kB
+[vite:dts] Declaration files built in 633ms.
 
-dist/style.css    1.86 kB │ gzip:   0.74 kB
-dist/index.mjs  479.15 kB │ gzip: 131.62 kB │ map: 1,374.51 kB
-dist/style.css    1.86 kB │ gzip:   0.74 kB
-dist/index.cjs  317.52 kB │ gzip: 100.66 kB │ map: 1,338.65 kB
-dist/style.css        1.86 kB │ gzip:   0.74 kB
-dist/index.iife.js  317.44 kB │ gzip: 100.66 kB │ map: 1,338.61 kB
-✓ built in 1.39s
+dist/style.css            12.08 kB │ gzip:  2.84 kB
+dist/index.cjs             1.09 kB │ gzip:  0.42 kB │ map:     0.09 kB
+dist/icons-B8XthyAJ.cjs    3.00 kB │ gzip:  1.48 kB │ map:     4.68 kB
+dist/notion.cjs            7.38 kB │ gzip:  2.47 kB │ map:    20.92 kB
+dist/toolbar.cjs           8.95 kB │ gzip:  2.59 kB │ map:    26.10 kB
+dist/table.cjs            39.49 kB │ gzip: 12.86 kB │ map:   172.97 kB
+dist/markdown.cjs         52.80 kB │ gzip: 16.84 kB │ map:   136.09 kB
+dist/index-C0Agr0lE.cjs  257.54 kB │ gzip: 81.45 kB │ map: 1,103.29 kB
+✓ built in 1.42s

@@ -21,6 +21,7 @@ import {
   toggleUnderline
 } from '../../commands';
 import type { EditorToolbarAction } from '../../types';
+import { toolbarIcons } from '../icons';
 
 const DEFAULT_FONT_SIZES = [10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 64, 72];
 const DEFAULT_CODE_LANGUAGES = ['', 'plaintext', 'javascript', 'typescript', 'tsx', 'jsx', 'json', 'html', 'css', 'bash', 'markdown'];
@@ -110,6 +111,7 @@ export class Toolbar {
   readonly element = document.createElement('div');
 
   private readonly actions = new Map<HTMLButtonElement, ToolbarActionConfig>();
+  private readonly codeLanguageGroup = document.createElement('div');
   private readonly fontSizeSelect = document.createElement('select');
   private readonly blockSelect = document.createElement('select');
   private readonly codeLanguageSelect = document.createElement('select');
@@ -140,10 +142,7 @@ export class Toolbar {
     this.onEditImageAlt = options.onEditImageAlt;
     this.element.className = 'oh-editor__toolbar';
 
-    this.renderActions();
-    this.renderBlockSelect();
-    this.renderCodeLanguageSelect();
-    this.renderFontSizeSelect(options.fontSizes ?? DEFAULT_FONT_SIZES);
+    this.renderToolbar(options.fontSizes ?? DEFAULT_FONT_SIZES);
     this.sync();
   }
 
@@ -160,6 +159,10 @@ export class Toolbar {
       const isAltButton = button.dataset.role === 'image-alt';
       button.disabled = this.readOnly || (isImageButton && !this.canUploadImages) || (isAltButton && !isImageSelected(state)) || (config.isEnabled ? !config.isEnabled(state) : false) || button.dataset.busy === 'true';
       button.dataset.active = config.isActive?.(state) ? 'true' : 'false';
+
+      if (isAltButton) {
+        button.hidden = !isImageSelected(state);
+      }
     }
 
     this.blockSelect.disabled = this.readOnly;
@@ -168,7 +171,9 @@ export class Toolbar {
     this.fontSizeSelect.disabled = this.readOnly;
     this.fontSizeSelect.value = String(getActiveFontSize(state));
 
-    this.codeLanguageSelect.disabled = this.readOnly || !isInCodeBlock(state);
+    const inCodeBlock = isInCodeBlock(state);
+    this.codeLanguageGroup.hidden = !inCodeBlock;
+    this.codeLanguageSelect.disabled = this.readOnly || !inCodeBlock;
     this.codeLanguageSelect.value = getActiveCodeLanguage(state);
   }
 
@@ -177,18 +182,23 @@ export class Toolbar {
     this.actions.clear();
   }
 
-  private renderActions() {
-    const groups: ToolbarActionConfig[][] = [
-      [
-        { label: 'B', title: 'Bold', command: (view) => run(view, toggleBold()), isActive: (state) => hasMark(state, 'strong') },
-        { label: 'I', title: 'Italic', command: (view) => run(view, toggleItalic()), isActive: (state) => hasMark(state, 'em') },
-        { label: 'U', title: 'Underline', command: (view) => run(view, toggleUnderline()), isActive: (state) => hasMark(state, 'underline') },
-        { label: 'S', title: 'Strikethrough', command: (view) => run(view, toggleStrike()), isActive: (state) => hasMark(state, 'strike') },
-        { label: '</>', title: 'Inline code', command: (view) => run(view, toggleCode()), isActive: (state) => hasMark(state, 'code') }
-      ],
-      [
+  private renderToolbar(fontSizes: number[]) {
+    this.element.append(
+      this.renderGroup([
+        { label: toolbarIcons.undo, title: 'Undo', command: (view) => undo(view.state, view.dispatch) },
+        { label: toolbarIcons.redo, title: 'Redo', command: (view) => redo(view.state, view.dispatch) }
+      ]),
+      this.renderBlockSelect(),
+      this.renderFontSizeSelect(fontSizes),
+      this.renderCodeLanguageSelect(),
+      this.renderGroup([
+        { label: toolbarIcons.bold, title: 'Bold', command: (view) => run(view, toggleBold()), isActive: (state) => hasMark(state, 'strong') },
+        { label: toolbarIcons.italic, title: 'Italic', command: (view) => run(view, toggleItalic()), isActive: (state) => hasMark(state, 'em') },
+        { label: toolbarIcons.underline, title: 'Underline', command: (view) => run(view, toggleUnderline()), isActive: (state) => hasMark(state, 'underline') },
+        { label: toolbarIcons.strike, title: 'Strikethrough', command: (view) => run(view, toggleStrike()), isActive: (state) => hasMark(state, 'strike') },
+        { label: toolbarIcons.inlineCode, title: 'Inline code', command: (view) => run(view, toggleCode()), isActive: (state) => hasMark(state, 'code') },
         {
-          label: 'Link',
+          label: toolbarIcons.link,
           title: 'Insert link',
           command: (view) => {
             const href = window.prompt('Enter URL', 'https://');
@@ -197,38 +207,30 @@ export class Toolbar {
           },
           isActive: (state) => hasMark(state, 'link')
         }
-      ],
-      [
-        { label: 'Quote', title: 'Blockquote', command: (view) => run(view, toggleBlockquote()), isActive: (state) => isBlockActive(state, 'blockquote') },
-        { label: 'UL', title: 'Bullet list', command: (view) => run(view, toggleBulletList()), isActive: (state) => isBlockActive(state, 'bullet_list') },
-        { label: 'OL', title: 'Ordered list', command: (view) => run(view, toggleOrderedList()), isActive: (state) => isBlockActive(state, 'ordered_list') },
-        { label: 'Code', title: 'Code block', command: (view) => run(view, insertCodeBlock()), isActive: (state) => isBlockActive(state, 'code_block') },
-        { label: 'HR', title: 'Horizontal rule', command: (view) => run(view, insertHR()) }
-      ],
-      [
-        { label: 'Undo', title: 'Undo', command: (view) => undo(view.state, view.dispatch) },
-        { label: 'Redo', title: 'Redo', command: (view) => redo(view.state, view.dispatch) }
-      ]
-    ];
+      ]),
+      this.renderGroup([
+        { label: toolbarIcons.bulletList, title: 'Bullet list', command: (view) => run(view, toggleBulletList()), isActive: (state) => isBlockActive(state, 'bullet_list') },
+        { label: toolbarIcons.orderedList, title: 'Ordered list', command: (view) => run(view, toggleOrderedList()), isActive: (state) => isBlockActive(state, 'ordered_list') },
+        { label: toolbarIcons.quote, title: 'Blockquote', command: (view) => run(view, toggleBlockquote()), isActive: (state) => isBlockActive(state, 'blockquote') },
+        { label: toolbarIcons.codeBlock, title: 'Code block', command: (view) => run(view, insertCodeBlock()), isActive: (state) => isBlockActive(state, 'code_block') },
+        { label: toolbarIcons.horizontalRule, title: 'Horizontal rule', command: (view) => run(view, insertHR()) }
+      ]),
+      this.renderInsertGroup()
+    );
 
-    for (const group of groups) {
-      const groupElement = document.createElement('div');
-      groupElement.className = 'oh-editor__toolbar-group';
-
-      for (const config of group) {
-        this.appendActionButton(groupElement, config);
-      }
-
-      this.element.append(groupElement);
+    if (this.tableActions.length) {
+      this.element.append(this.renderTableGroup());
     }
+  }
 
+  private renderInsertGroup() {
     const insertGroup = document.createElement('div');
     insertGroup.className = 'oh-editor__toolbar-group';
 
     const imageButton = document.createElement('button');
     imageButton.type = 'button';
     imageButton.className = 'oh-editor__button';
-    imageButton.textContent = 'Image';
+    imageButton.innerHTML = toolbarIcons.image;
     imageButton.title = 'Upload image';
     imageButton.setAttribute('aria-label', 'Upload image');
     imageButton.dataset.role = 'image';
@@ -244,7 +246,7 @@ export class Toolbar {
       });
     });
     this.actions.set(imageButton, {
-      label: 'Image',
+      label: toolbarIcons.image,
       title: 'Upload image',
       command: () => true
     });
@@ -253,7 +255,7 @@ export class Toolbar {
     const altButton = document.createElement('button');
     altButton.type = 'button';
     altButton.className = 'oh-editor__button';
-    altButton.textContent = 'Alt';
+    altButton.innerHTML = toolbarIcons.alt;
     altButton.title = 'Edit image alt text';
     altButton.setAttribute('aria-label', 'Edit image alt text');
     altButton.dataset.role = 'image-alt';
@@ -265,7 +267,7 @@ export class Toolbar {
       this.sync();
     });
     this.actions.set(altButton, {
-      label: 'Alt',
+      label: toolbarIcons.alt,
       title: 'Edit image alt text',
       command: () => true
     });
@@ -281,22 +283,24 @@ export class Toolbar {
       });
     }
 
-    this.element.append(insertGroup);
+    return insertGroup;
+  }
 
-    if (this.tableActions.length) {
-      const tableGroup = document.createElement('div');
-      tableGroup.className = 'oh-editor__toolbar-group';
-      for (const action of this.tableActions) {
-        this.appendActionButton(tableGroup, {
-          label: action.label,
-          title: action.title,
-          command: action.run,
-          isEnabled: action.isEnabled,
-          isActive: action.isActive
-        });
-      }
-      this.element.append(tableGroup);
+  private renderTableGroup() {
+    const tableGroup = document.createElement('div');
+    tableGroup.className = 'oh-editor__toolbar-group';
+
+    for (const action of this.tableActions) {
+      this.appendActionButton(tableGroup, {
+        label: action.label,
+        title: action.title,
+        command: action.run,
+        isEnabled: action.isEnabled,
+        isActive: action.isActive
+      });
     }
+
+    return tableGroup;
   }
 
   private renderBlockSelect() {
@@ -320,6 +324,7 @@ export class Toolbar {
     }
 
     this.blockSelect.className = 'oh-editor__select';
+    this.blockSelect.dataset.selectKind = 'block';
     this.blockSelect.title = 'Block type';
     this.blockSelect.setAttribute('aria-label', 'Block type');
     this.blockSelect.addEventListener('change', () => {
@@ -337,7 +342,7 @@ export class Toolbar {
     });
 
     group.append(this.blockSelect);
-    this.element.prepend(group);
+    return group;
   }
 
   private renderFontSizeSelect(fontSizes: number[]) {
@@ -357,6 +362,7 @@ export class Toolbar {
     }
 
     this.fontSizeSelect.className = 'oh-editor__select';
+    this.fontSizeSelect.dataset.selectKind = 'font-size';
     this.fontSizeSelect.title = 'Font size';
     this.fontSizeSelect.setAttribute('aria-label', 'Font size');
     this.fontSizeSelect.addEventListener('change', () => {
@@ -369,12 +375,11 @@ export class Toolbar {
     });
 
     group.append(this.fontSizeSelect);
-    this.element.prepend(group);
+    return group;
   }
 
   private renderCodeLanguageSelect() {
-    const group = document.createElement('div');
-    group.className = 'oh-editor__toolbar-group';
+    this.codeLanguageGroup.className = 'oh-editor__toolbar-group';
 
     for (const language of DEFAULT_CODE_LANGUAGES) {
       const option = document.createElement('option');
@@ -384,6 +389,7 @@ export class Toolbar {
     }
 
     this.codeLanguageSelect.className = 'oh-editor__select';
+    this.codeLanguageSelect.dataset.selectKind = 'code-language';
     this.codeLanguageSelect.title = 'Code block language';
     this.codeLanguageSelect.setAttribute('aria-label', 'Code block language');
     this.codeLanguageSelect.addEventListener('change', () => {
@@ -393,15 +399,27 @@ export class Toolbar {
       this.sync();
     });
 
-    group.append(this.codeLanguageSelect);
-    this.element.prepend(group);
+    this.codeLanguageGroup.append(this.codeLanguageSelect);
+    this.codeLanguageGroup.hidden = true;
+    return this.codeLanguageGroup;
+  }
+
+  private renderGroup(configs: ToolbarActionConfig[]) {
+    const group = document.createElement('div');
+    group.className = 'oh-editor__toolbar-group';
+
+    for (const config of configs) {
+      this.appendActionButton(group, config);
+    }
+
+    return group;
   }
 
   private appendActionButton(group: HTMLElement, config: ToolbarActionConfig) {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'oh-editor__button';
-    button.textContent = config.label;
+    button.innerHTML = config.label;
     button.title = config.title;
     button.setAttribute('aria-label', config.title);
     button.addEventListener('mousedown', (event) => {

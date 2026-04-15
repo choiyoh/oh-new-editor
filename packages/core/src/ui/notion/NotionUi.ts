@@ -10,6 +10,7 @@ import {
   toggleBlockquote,
   toggleBold,
   toggleBulletList,
+  toggleCode,
   toggleItalic,
   toggleLink,
   toggleOrderedList,
@@ -17,6 +18,7 @@ import {
   toggleUnderline
 } from '../../commands';
 import type { EditorToolbarAction, EditorToolbarController } from '../../types';
+import { toolbarIcons } from '../icons';
 
 type NotionUiOptions = {
   readOnly?: boolean;
@@ -25,7 +27,9 @@ type NotionUiOptions = {
 };
 
 type SlashItem = {
+  icon: string;
   label: string;
+  description?: string;
   keywords: string[];
   run: () => unknown;
 };
@@ -50,6 +54,33 @@ function getSlashMatch(state: EditorState) {
   return { query, from, to: selection.from };
 }
 
+function hasMark(state: EditorState, markName: string) {
+  const markType = state.schema.marks[markName];
+  if (!markType) return false;
+
+  const { from, to, empty } = state.selection;
+  if (empty) {
+    return Boolean(markType.isInSet(state.storedMarks ?? state.selection.$from.marks()));
+  }
+
+  return state.doc.rangeHasMark(from, to, markType);
+}
+
+function isBlockActive(state: EditorState, nodeName: string, attrs?: Record<string, unknown>) {
+  const nodeType = state.schema.nodes[nodeName];
+  if (!nodeType) return false;
+
+  const { $from } = state.selection;
+  for (let depth = $from.depth; depth >= 0; depth -= 1) {
+    const node = $from.node(depth);
+    if (node.type !== nodeType) continue;
+    if (!attrs) return true;
+    return Object.entries(attrs).every(([key, value]) => node.attrs[key] === value);
+  }
+
+  return false;
+}
+
 export class NotionUi implements EditorToolbarController {
   readonly element = document.createElement('div');
 
@@ -60,6 +91,32 @@ export class NotionUi implements EditorToolbarController {
   private readonly slashItems: SlashItem[];
   private selectedSlashIndex = 0;
   private readOnly = false;
+
+  private getOverlayRect() {
+    return (this.element.parentElement ?? this.view.dom.parentElement ?? document.body).getBoundingClientRect();
+  }
+
+  private placeOverlay(element: HTMLElement, coords: { left: number; top: number }, options: { offsetX?: number; offsetY?: number; centerX?: boolean } = {}) {
+    const rect = this.getOverlayRect();
+    const offsetX = options.offsetX ?? 0;
+    const offsetY = options.offsetY ?? 0;
+
+    let left = coords.left - rect.left + offsetX;
+    let top = coords.top - rect.top + offsetY;
+
+    if (options.centerX) {
+      left -= element.offsetWidth / 2;
+    }
+
+    const maxLeft = Math.max(12, rect.width - element.offsetWidth - 12);
+    const maxTop = Math.max(12, rect.height - element.offsetHeight - 12);
+
+    left = Math.min(Math.max(12, left), maxLeft);
+    top = Math.min(Math.max(12, top), maxTop);
+
+    element.style.left = `${left}px`;
+    element.style.top = `${top}px`;
+  }
 
   constructor(
     private readonly view: EditorView,
@@ -163,23 +220,28 @@ export class NotionUi implements EditorToolbarController {
 
   private renderBubble() {
     const actions = [
-      ['B', 'Bold', () => run(this.view, toggleBold())],
-      ['I', 'Italic', () => run(this.view, toggleItalic())],
-      ['U', 'Underline', () => run(this.view, toggleUnderline())],
-      ['S', 'Strike', () => run(this.view, toggleStrike())],
-      ['Link', 'Link', () => {
+      [toolbarIcons.bold, 'Bold', () => run(this.view, toggleBold()), () => hasMark(this.view.state, 'strong')],
+      [toolbarIcons.italic, 'Italic', () => run(this.view, toggleItalic()), () => hasMark(this.view.state, 'em')],
+      [toolbarIcons.underline, 'Underline', () => run(this.view, toggleUnderline()), () => hasMark(this.view.state, 'underline')],
+      [toolbarIcons.strike, 'Strikethrough', () => run(this.view, toggleStrike()), () => hasMark(this.view.state, 'strike')],
+      [toolbarIcons.inlineCode, 'Inline code', () => run(this.view, toggleCode()), () => hasMark(this.view.state, 'code')],
+      [toolbarIcons.bulletList, 'Bullet list', () => run(this.view, toggleBulletList()), () => isBlockActive(this.view.state, 'bullet_list')],
+      [toolbarIcons.orderedList, 'Ordered list', () => run(this.view, toggleOrderedList()), () => isBlockActive(this.view.state, 'ordered_list')],
+      [toolbarIcons.quote, 'Blockquote', () => run(this.view, toggleBlockquote()), () => isBlockActive(this.view.state, 'blockquote')],
+      [toolbarIcons.link, 'Link', () => {
         const href = window.prompt('Enter URL', 'https://');
         if (!href) return false;
         return run(this.view, toggleLink(href));
-      }]
+      }, () => hasMark(this.view.state, 'link')]
     ] as const;
 
-    for (const [label, title, action] of actions) {
+    for (const [icon, title, action, isActive] of actions) {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'oh-editor__button';
-      button.textContent = label;
+      button.innerHTML = icon;
       button.title = title;
+      button.setAttribute('aria-label', title);
       button.addEventListener('mousedown', (event) => {
         event.preventDefault();
         if (this.readOnly) return;
@@ -187,6 +249,7 @@ export class NotionUi implements EditorToolbarController {
         this.view.focus();
         this.sync();
       });
+      button.dataset.active = isActive() ? 'true' : 'false';
       this.bubble.append(button);
     }
   }
@@ -201,10 +264,27 @@ export class NotionUi implements EditorToolbarController {
 
     const start = this.view.coordsAtPos(selection.from);
     const end = this.view.coordsAtPos(selection.to);
+    for (const button of this.bubble.querySelectorAll<HTMLButtonElement>('.oh-editor__button')) {
+      const title = button.getAttribute('aria-label');
+      button.dataset.active = title === 'Bold' ? String(hasMark(this.view.state, 'strong'))
+        : title === 'Italic' ? String(hasMark(this.view.state, 'em'))
+        : title === 'Underline' ? String(hasMark(this.view.state, 'underline'))
+        : title === 'Strikethrough' ? String(hasMark(this.view.state, 'strike'))
+        : title === 'Inline code' ? String(hasMark(this.view.state, 'code'))
+        : title === 'Bullet list' ? String(isBlockActive(this.view.state, 'bullet_list'))
+        : title === 'Ordered list' ? String(isBlockActive(this.view.state, 'ordered_list'))
+        : title === 'Blockquote' ? String(isBlockActive(this.view.state, 'blockquote'))
+        : title === 'Link' ? String(hasMark(this.view.state, 'link'))
+        : 'false';
+    }
     this.bubble.hidden = false;
-    this.bubble.style.left = `${(start.left + end.right) / 2}px`;
-    this.bubble.style.top = `${Math.min(start.top, end.top) - 12}px`;
-    this.bubble.style.transform = 'translate(-50%, -100%)';
+    this.placeOverlay(this.bubble, {
+      left: (start.left + end.right) / 2,
+      top: Math.min(start.top, end.top)
+    }, {
+      centerX: true,
+      offsetY: -this.bubble.offsetHeight - 12
+    });
   }
 
   private syncCodeLanguage() {
@@ -221,8 +301,9 @@ export class NotionUi implements EditorToolbarController {
       const coords = this.view.coordsAtPos($from.before(depth + 1));
       this.codeLanguage.hidden = false;
       this.codeLanguage.value = node.attrs.language ?? '';
-      this.codeLanguage.style.left = `${coords.left}px`;
-      this.codeLanguage.style.top = `${coords.top - 36}px`;
+      this.placeOverlay(this.codeLanguage, coords, {
+        offsetY: -this.codeLanguage.offsetHeight - 8
+      });
       return;
     }
 
@@ -240,29 +321,30 @@ export class NotionUi implements EditorToolbarController {
 
   private createSlashItems(options: NotionUiOptions): SlashItem[] {
     const items: SlashItem[] = [
-      { label: 'Text', keywords: ['paragraph', 'text'], run: () => run(this.view, insertParagraph()) },
-      { label: 'Heading 1', keywords: ['h1', 'heading'], run: () => run(this.view, setHeading(1)) },
-      { label: 'Heading 2', keywords: ['h2', 'heading'], run: () => run(this.view, setHeading(2)) },
-      { label: 'Heading 3', keywords: ['h3', 'heading'], run: () => run(this.view, setHeading(3)) },
-      { label: 'Bullet List', keywords: ['list', 'bullet'], run: () => run(this.view, toggleBulletList()) },
-      { label: 'Ordered List', keywords: ['list', 'ordered', 'number'], run: () => run(this.view, toggleOrderedList()) },
-      { label: 'Blockquote', keywords: ['quote'], run: () => run(this.view, toggleBlockquote()) },
-      { label: 'Code Block', keywords: ['code'], run: () => run(this.view, insertCodeBlock()) },
-      { label: 'Divider', keywords: ['hr', 'divider'], run: () => run(this.view, insertHR()) }
+      { icon: toolbarIcons.paragraph, label: 'Text', description: 'Start writing with a plain paragraph', keywords: ['paragraph', 'text'], run: () => run(this.view, insertParagraph()) },
+      { icon: toolbarIcons.heading1, label: 'Heading 1', description: 'Large section heading', keywords: ['h1', 'heading', 'title'], run: () => run(this.view, setHeading(1)) },
+      { icon: toolbarIcons.heading2, label: 'Heading 2', description: 'Medium section heading', keywords: ['h2', 'heading', 'subtitle'], run: () => run(this.view, setHeading(2)) },
+      { icon: toolbarIcons.heading3, label: 'Heading 3', description: 'Small section heading', keywords: ['h3', 'heading'], run: () => run(this.view, setHeading(3)) },
+      { icon: toolbarIcons.bulletList, label: 'Bullet List', description: 'Create an unordered list', keywords: ['list', 'bullet'], run: () => run(this.view, toggleBulletList()) },
+      { icon: toolbarIcons.orderedList, label: 'Ordered List', description: 'Create a numbered list', keywords: ['list', 'ordered', 'number'], run: () => run(this.view, toggleOrderedList()) },
+      { icon: toolbarIcons.quote, label: 'Blockquote', description: 'Highlight a quoted passage', keywords: ['quote'], run: () => run(this.view, toggleBlockquote()) },
+      { icon: toolbarIcons.codeBlock, label: 'Code Block', description: 'Insert a fenced code block', keywords: ['code', 'snippet'], run: () => run(this.view, insertCodeBlock()) },
+      { icon: toolbarIcons.divider, label: 'Divider', description: 'Insert a horizontal divider', keywords: ['hr', 'divider', 'separator'], run: () => run(this.view, insertHR()) }
     ];
 
     if (options.onPickImage) {
-      items.push({ label: 'Image', keywords: ['image', 'upload'], run: () => options.onPickImage?.() });
+      items.push({ icon: toolbarIcons.image, label: 'Image', description: 'Upload an image from your device', keywords: ['image', 'upload', 'media'], run: () => options.onPickImage?.() });
     }
 
     for (const action of options.insertActions ?? []) {
       items.push({
-        label: action.label,
-        keywords: [action.label.toLowerCase(), action.title.toLowerCase()],
+        icon: action.label,
+        label: action.title,
+        description: action.title,
+        keywords: [action.title.toLowerCase()],
         run: () => action.run(this.view)
       });
     }
-
     return items;
   }
 
@@ -288,8 +370,9 @@ export class NotionUi implements EditorToolbarController {
 
     const coords = this.view.coordsAtPos(this.view.state.selection.from);
     this.slash.hidden = false;
-    this.slash.style.left = `${coords.left}px`;
-    this.slash.style.top = `${coords.bottom + 8}px`;
+    this.placeOverlay(this.slash, coords, {
+      offsetY: 8
+    });
     this.selectedSlashIndex = Math.min(this.selectedSlashIndex, visibleItems.length - 1);
     this.renderSlashItems();
   }
@@ -300,10 +383,27 @@ export class NotionUi implements EditorToolbarController {
 
     visibleItems.forEach((item, index) => {
       const button = document.createElement('button');
+      const icon = document.createElement('span');
+      const copy = document.createElement('span');
+      const label = document.createElement('span');
       button.type = 'button';
       button.className = 'oh-editor__slash-item';
       button.dataset.active = index === this.selectedSlashIndex ? 'true' : 'false';
-      button.textContent = item.label;
+      icon.className = 'oh-editor__slash-item-icon';
+      icon.innerHTML = item.icon;
+      copy.className = 'oh-editor__slash-item-copy';
+      label.className = 'oh-editor__slash-item-label';
+      label.textContent = item.label;
+      copy.append(label);
+
+      if (item.description) {
+        const description = document.createElement('span');
+        description.className = 'oh-editor__slash-item-description';
+        description.textContent = item.description;
+        copy.append(description);
+      }
+
+      button.append(icon, copy);
       button.addEventListener('mousedown', (event) => {
         event.preventDefault();
         void this.applySlashItem(item);
