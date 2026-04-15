@@ -87,6 +87,7 @@ export interface EditorToolbarSupport {
     onEditImageAlt?: () => void;
     insertActions?: EditorToolbarAction[];
     tableActions?: EditorToolbarAction[];
+    tableLimits?: { maxRows?: number; maxCols?: number };
   }): EditorToolbarController;
 }
 

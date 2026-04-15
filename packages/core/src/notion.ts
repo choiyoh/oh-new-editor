@@ -7,7 +7,13 @@ import { NotionUi } from './ui/notion/NotionUi';
 export function createNotionSupport(): EditorToolbarSupport {
   return {
     createToolbar(view, options) {
-      return new NotionUi(view, options);
+      return new NotionUi(view, {
+        readOnly: options.readOnly,
+        onPickImage: options.onPickImage,
+        onEditImageAlt: options.onEditImageAlt,
+        insertActions: options.insertActions,
+        tableLimits: options.tableLimits
+      });
     }
   };
 }

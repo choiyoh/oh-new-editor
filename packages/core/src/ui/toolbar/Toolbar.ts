@@ -22,6 +22,7 @@ import {
 } from '../../commands';
 import type { EditorToolbarAction } from '../../types';
 import { toolbarIcons } from '../icons';
+import { TableGridPicker } from '../menus/TableGridPicker';
 
 const DEFAULT_FONT_SIZES = [10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 64, 72];
 const DEFAULT_CODE_LANGUAGES = ['', 'plaintext', 'javascript', 'typescript', 'tsx', 'jsx', 'json', 'html', 'css', 'bash', 'markdown'];
@@ -120,6 +121,8 @@ export class Toolbar {
   private readonly onPickImage?: () => Promise<void>;
   private readonly canUploadImages: boolean;
   private readonly onEditImageAlt?: () => void;
+  private readonly tableLimits?: { maxRows?: number; maxCols?: number };
+  private gridPicker: TableGridPicker | null = null;
   private readOnly = false;
 
   constructor(
@@ -132,6 +135,7 @@ export class Toolbar {
       onEditImageAlt?: () => void;
       insertActions?: EditorToolbarAction[];
       tableActions?: EditorToolbarAction[];
+      tableLimits?: { maxRows?: number; maxCols?: number };
     } = {}
   ) {
     this.readOnly = Boolean(options.readOnly);
@@ -140,6 +144,7 @@ export class Toolbar {
     this.canUploadImages = Boolean(options.canUploadImages);
     this.onPickImage = options.onPickImage;
     this.onEditImageAlt = options.onEditImageAlt;
+    this.tableLimits = options.tableLimits;
     this.element.className = 'oh-editor__toolbar';
 
     this.renderToolbar(options.fontSizes ?? DEFAULT_FONT_SIZES);
@@ -178,6 +183,7 @@ export class Toolbar {
   }
 
   destroy() {
+    this.closeGridPicker();
     this.element.remove();
     this.actions.clear();
   }
@@ -273,17 +279,64 @@ export class Toolbar {
     });
     insertGroup.append(altButton);
 
-    for (const action of this.insertActions) {
-      this.appendActionButton(insertGroup, {
-        label: action.label,
-        title: action.title,
-        command: action.run,
-        isEnabled: action.isEnabled,
-        isActive: action.isActive
-      });
+    // The first insert action is always the table insert button —
+    // wire it to open the grid picker instead of directly inserting 3×3.
+    const hasTableInsert = this.insertActions.length > 0;
+
+    for (let i = 0; i < this.insertActions.length; i++) {
+      const action = this.insertActions[i];
+
+      if (i === 0 && hasTableInsert) {
+        // Table insert → grid picker
+        const tableButton = document.createElement('button');
+        tableButton.type = 'button';
+        tableButton.className = 'oh-editor__button';
+        tableButton.innerHTML = action.label;
+        tableButton.title = action.title;
+        tableButton.setAttribute('aria-label', action.title);
+        tableButton.addEventListener('mousedown', (event) => {
+          event.preventDefault();
+          if (this.readOnly) return;
+          this.openGridPicker(tableButton);
+        });
+        this.actions.set(tableButton, {
+          label: action.label,
+          title: action.title,
+          command: action.run,
+          isEnabled: action.isEnabled,
+          isActive: action.isActive
+        });
+        insertGroup.append(tableButton);
+      } else {
+        this.appendActionButton(insertGroup, {
+          label: action.label,
+          title: action.title,
+          command: action.run,
+          isEnabled: action.isEnabled,
+          isActive: action.isActive
+        });
+      }
     }
 
     return insertGroup;
+  }
+
+  private openGridPicker(anchor: HTMLElement) {
+    this.closeGridPicker();
+
+    this.gridPicker = new TableGridPicker(this.view, this.tableLimits);
+
+    const rect = anchor.getBoundingClientRect();
+    const editorRect = this.element.parentElement?.getBoundingClientRect() ?? document.body.getBoundingClientRect();
+    this.gridPicker.open(rect.left - editorRect.left, rect.bottom - editorRect.top + 4);
+    this.element.parentElement?.append(this.gridPicker.element);
+  }
+
+  private closeGridPicker() {
+    if (this.gridPicker) {
+      this.gridPicker.destroy();
+      this.gridPicker = null;
+    }
   }
 
   private renderTableGroup() {

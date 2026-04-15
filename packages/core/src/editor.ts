@@ -88,7 +88,8 @@ class ProseMirrorEditor implements Editor {
         onPickImage: () => this.pickImage(),
         onEditImageAlt: () => this.editSelectedImageAlt(),
         insertActions: options.table?.insertActions,
-        tableActions: options.table?.actions
+        tableActions: options.table?.actions,
+        tableLimits: options.table ? { maxRows: options.table.maxRows, maxCols: options.table.maxCols } : undefined
       });
       this.host.prepend(this.toolbar.element);
     }

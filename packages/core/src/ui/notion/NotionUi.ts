@@ -20,12 +20,14 @@ import {
 } from '../../commands';
 import type { EditorToolbarAction, EditorToolbarController } from '../../types';
 import { toolbarIcons } from '../icons';
+import { TableGridPicker } from '../menus/TableGridPicker';
 
 type NotionUiOptions = {
   readOnly?: boolean;
   onPickImage?: () => Promise<void>;
   onEditImageAlt?: () => void;
   insertActions?: EditorToolbarAction[];
+  tableLimits?: { maxRows?: number; maxCols?: number };
 };
 
 type SlashCategory = 'Basic' | 'Media' | 'Advanced';
@@ -108,6 +110,8 @@ export class NotionUi implements EditorToolbarController {
   private selectedSlashIndex = 0;
   private readOnly = false;
   private readonly onEditImageAlt?: () => void;
+  private readonly tableLimits?: { maxRows?: number; maxCols?: number };
+  private gridPicker: TableGridPicker | null = null;
 
   private getOverlayRect() {
     return (this.element.parentElement ?? this.view.dom.parentElement ?? document.body).getBoundingClientRect();
@@ -141,6 +145,7 @@ export class NotionUi implements EditorToolbarController {
   ) {
     this.readOnly = Boolean(options.readOnly);
     this.onEditImageAlt = options.onEditImageAlt;
+    this.tableLimits = options.tableLimits;
     this.element.className = 'oh-editor__notion-ui';
 
     this.bubble.className = 'oh-editor__bubble-toolbar';
@@ -196,8 +201,31 @@ export class NotionUi implements EditorToolbarController {
   destroy() {
     this.view.dom.removeEventListener('keydown', this.handleKeyDown);
     this.view.dom.removeEventListener('input', this.handleInput);
+    this.closeGridPicker();
     this.codeLanguage.remove();
     this.element.remove();
+  }
+
+  private openGridPicker() {
+    this.closeGridPicker();
+
+    this.gridPicker = new TableGridPicker(this.view, this.tableLimits);
+
+    const coords = this.view.coordsAtPos(this.view.state.selection.from);
+    this.gridPicker.open(0, 0);
+    this.element.append(this.gridPicker.element);
+
+    // Position after append so we can measure
+    const editorRect = this.element.getBoundingClientRect();
+    this.gridPicker.element.style.left = `${coords.left - editorRect.left}px`;
+    this.gridPicker.element.style.top = `${coords.bottom - editorRect.top + 8}px`;
+  }
+
+  private closeGridPicker() {
+    if (this.gridPicker) {
+      this.gridPicker.destroy();
+      this.gridPicker = null;
+    }
   }
 
   private readonly handleInput = () => {
@@ -365,7 +393,22 @@ export class NotionUi implements EditorToolbarController {
       items.push({ icon: toolbarIcons.image, label: 'Image', description: 'Upload an image from your device', category: 'Media', keywords: ['image', 'upload', 'media'], run: () => options.onPickImage?.() });
     }
 
-    for (const action of options.insertActions ?? []) {
+    // If insertActions include a table insert action, show a Table slash item
+    // that opens the grid picker instead of inserting 3×3 directly.
+    const tableInsertAction = options.insertActions?.[0];
+    if (tableInsertAction) {
+      items.push({
+        icon: toolbarIcons.table,
+        label: 'Table',
+        description: 'Insert a table with custom rows and columns',
+        category: 'Advanced',
+        keywords: ['table', 'grid', 'rows', 'columns'],
+        run: () => this.openGridPicker()
+      });
+    }
+
+    for (let i = 1; i < (options.insertActions?.length ?? 0); i++) {
+      const action = options.insertActions![i];
       items.push({
         icon: action.label,
         label: action.title,
