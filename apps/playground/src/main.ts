@@ -102,8 +102,8 @@ app.innerHTML = `
       <div class="demo-layout">
         <aside class="demo-sidebar">
           <div class="demo-mode-toggle" role="tablist" aria-label="Editor mode">
-            <button class="demo-mode-button is-active" data-mode="toolbar" role="tab" aria-selected="true">Toolbar mode</button>
-            <button class="demo-mode-button" data-mode="notion" role="tab" aria-selected="false">Notion mode</button>
+            <button class="demo-mode-button is-active" data-mode="toolbar" role="tab" aria-selected="true" aria-controls="editor-host" tabindex="0">Toolbar mode</button>
+            <button class="demo-mode-button" data-mode="notion" role="tab" aria-selected="false" aria-controls="editor-host" tabindex="-1">Notion mode</button>
           </div>
 
           <div class="demo-panel">
@@ -133,11 +133,12 @@ app.innerHTML = `
               <span id="demo-status" class="demo-status">Autosave on</span>
               <label class="theme-toggle">
                 <input id="theme-toggle" type="checkbox" />
-                <span>Dark theme</span>
+                <span class="toggle-track" aria-hidden="true"></span>
+                <span class="toggle-label">Dark theme</span>
               </label>
             </div>
           </div>
-          <div id="editor-host" class="demo-editor"></div>
+          <div id="editor-host" class="demo-editor" role="tabpanel" aria-label="Editor"></div>
         </div>
       </div>
     </section>
@@ -209,6 +210,7 @@ function updateModeUi(currentMode: DemoMode) {
     const active = button.dataset.mode === currentMode;
     button.classList.toggle('is-active', active);
     button.setAttribute('aria-selected', String(active));
+    button.tabIndex = active ? 0 : -1;
   }
 
   if (currentMode === 'notion') {

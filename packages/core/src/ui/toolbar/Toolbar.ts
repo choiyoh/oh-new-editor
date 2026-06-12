@@ -23,6 +23,7 @@ import {
 import type { EditorToolbarAction } from '../../types';
 import { toolbarIcons } from '../icons';
 import { TableGridPicker } from '../menus/TableGridPicker';
+import { LinkEditor } from '../LinkEditor';
 
 const DEFAULT_FONT_SIZES = [10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 64, 72];
 const DEFAULT_CODE_LANGUAGES = ['', 'plaintext', 'javascript', 'typescript', 'tsx', 'jsx', 'json', 'html', 'css', 'bash', 'markdown'];
@@ -108,6 +109,16 @@ function isInCodeBlock(state: EditorState) {
   return getBlockValue(state) === 'code_block';
 }
 
+function getActiveLinkHref(state: EditorState): string | null {
+  const { $from, empty } = state.selection;
+  if (!empty) return null;
+  const linkMark = state.schema.marks.link;
+  if (!linkMark) return null;
+  const marks = state.storedMarks ?? $from.marks();
+  const link = linkMark.isInSet(marks);
+  return link?.attrs.href ?? null;
+}
+
 export class Toolbar {
   readonly element = document.createElement('div');
 
@@ -124,6 +135,7 @@ export class Toolbar {
   private readonly tableLimits?: { maxRows?: number; maxCols?: number };
   private gridPicker: TableGridPicker | null = null;
   private readOnly = false;
+  private linkEditor: LinkEditor = new LinkEditor();
 
   constructor(
     private readonly view: EditorView,
@@ -146,6 +158,9 @@ export class Toolbar {
     this.onEditImageAlt = options.onEditImageAlt;
     this.tableLimits = options.tableLimits;
     this.element.className = 'oh-editor__toolbar';
+    this.element.setAttribute('role', 'toolbar');
+    this.element.setAttribute('aria-label', 'Text formatting');
+    this.element.setAttribute('aria-orientation', 'horizontal');
 
     this.renderToolbar(options.fontSizes ?? DEFAULT_FONT_SIZES);
     this.sync();
@@ -184,6 +199,7 @@ export class Toolbar {
 
   destroy() {
     this.closeGridPicker();
+    this.linkEditor.close();
     this.element.remove();
     this.actions.clear();
   }
@@ -206,10 +222,33 @@ export class Toolbar {
         {
           label: toolbarIcons.link,
           title: 'Insert link',
-          command: (view) => {
-            const href = window.prompt('Enter URL', 'https://');
-            if (!href) return false;
-            return run(view, toggleLink(href));
+          command: () => {
+            const linkButton = this.element.querySelector<HTMLElement>('[aria-label="Insert link"]');
+            if (!linkButton) return false;
+            const btnRect = linkButton.getBoundingClientRect();
+            const container = this.element.parentElement!;
+            const existingHref = getActiveLinkHref(this.view.state);
+
+            this.linkEditor.open({
+              container,
+              coords: { left: btnRect.left, top: btnRect.bottom + 4 },
+              anchorHref: existingHref ?? undefined,
+              onConfirm: (href) => {
+                run(this.view, toggleLink(href));
+                this.view.focus();
+                this.sync();
+              },
+              onRemove: existingHref ? () => {
+                run(this.view, toggleLink(existingHref));
+                this.view.focus();
+                this.sync();
+              } : undefined,
+              onClose: () => {
+                this.view.focus();
+                this.sync();
+              }
+            });
+            return true;
           },
           isActive: (state) => hasMark(state, 'link')
         }
@@ -232,11 +271,18 @@ export class Toolbar {
   private renderInsertGroup() {
     const insertGroup = document.createElement('div');
     insertGroup.className = 'oh-editor__toolbar-group';
+    insertGroup.setAttribute('role', 'group');
+    insertGroup.setAttribute('aria-label', 'Insert');
 
     const imageButton = document.createElement('button');
     imageButton.type = 'button';
     imageButton.className = 'oh-editor__button';
-    imageButton.innerHTML = toolbarIcons.image;
+    imageButton.innerHTML = `
+      <span class="oh-editor__button-icon">${toolbarIcons.image}</span>
+      <span class="oh-editor__button-spinner">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6" stroke-dasharray="28" stroke-dashoffset="8" stroke-linecap="round"><animateTransform attributeName="transform" type="rotate" from="0 8 8" to="360 8 8" dur="0.8s" repeatCount="indefinite"/></circle></svg>
+      </span>
+    `;
     imageButton.title = 'Upload image';
     imageButton.setAttribute('aria-label', 'Upload image');
     imageButton.dataset.role = 'image';
@@ -342,6 +388,8 @@ export class Toolbar {
   private renderTableGroup() {
     const tableGroup = document.createElement('div');
     tableGroup.className = 'oh-editor__toolbar-group';
+    tableGroup.setAttribute('role', 'group');
+    tableGroup.setAttribute('aria-label', 'Table actions');
 
     for (const action of this.tableActions) {
       this.appendActionButton(tableGroup, {
@@ -359,6 +407,8 @@ export class Toolbar {
   private renderBlockSelect() {
     const group = document.createElement('div');
     group.className = 'oh-editor__toolbar-group';
+    group.setAttribute('role', 'group');
+    group.setAttribute('aria-label', 'Block type');
 
     for (const [value, label] of [
       ['paragraph', 'Paragraph'],
@@ -401,6 +451,8 @@ export class Toolbar {
   private renderFontSizeSelect(fontSizes: number[]) {
     const group = document.createElement('div');
     group.className = 'oh-editor__toolbar-group';
+    group.setAttribute('role', 'group');
+    group.setAttribute('aria-label', 'Font size');
 
     const defaultOption = document.createElement('option');
     defaultOption.value = '';
@@ -460,6 +512,7 @@ export class Toolbar {
   private renderGroup(configs: ToolbarActionConfig[]) {
     const group = document.createElement('div');
     group.className = 'oh-editor__toolbar-group';
+    group.setAttribute('role', 'group');
 
     for (const config of configs) {
       this.appendActionButton(group, config);

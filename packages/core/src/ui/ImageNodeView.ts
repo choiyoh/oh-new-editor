@@ -36,9 +36,11 @@ export class ImageNodeView implements NodeView {
     this.handle.setAttribute('aria-label', 'Resize image');
     this.handle.hidden = true;
     this.handle.addEventListener('mousedown', this.handleResizeStart);
+    this.handle.addEventListener('touchstart', this.handleResizeStart, { passive: false });
     this.dom.append(this.handle);
 
     this.render(node);
+    this.dom.style.padding = '0 9px 9px 0';
   }
 
   update(node: ProseMirrorNode) {
@@ -71,6 +73,7 @@ export class ImageNodeView implements NodeView {
 
   destroy() {
     this.handle.removeEventListener('mousedown', this.handleResizeStart);
+    this.handle.removeEventListener('touchstart', this.handleResizeStart);
     this.dragCleanup?.();
     this.dragAbortController?.abort();
   }
@@ -84,9 +87,13 @@ export class ImageNodeView implements NodeView {
     this.img.style.height = height ? `${toPx(height)}px` : '';
   }
 
-  private readonly handleResizeStart = (event: MouseEvent) => {
+  private readonly handleResizeStart = (event: MouseEvent | TouchEvent) => {
     event.preventDefault();
     event.stopPropagation();
+
+    const isTouch = 'touches' in event;
+    const startClientX = isTouch ? (event as TouchEvent).touches[0].clientX : (event as MouseEvent).clientX;
+    const startClientY = isTouch ? (event as TouchEvent).touches[0].clientY : (event as MouseEvent).clientY;
 
     const rect = this.img.getBoundingClientRect();
     const naturalWidth = this.img.naturalWidth || rect.width || MIN_WIDTH;
@@ -99,9 +106,11 @@ export class ImageNodeView implements NodeView {
     this.dragAbortController = new AbortController();
     const { signal } = this.dragAbortController;
 
-    const onMove = (moveEvent: MouseEvent) => {
-      const deltaX = moveEvent.clientX - event.clientX;
-      const deltaY = moveEvent.clientY - event.clientY;
+    const onMove = (moveEvent: MouseEvent | TouchEvent) => {
+      const moveClientX = 'touches' in moveEvent ? (moveEvent as TouchEvent).touches[0].clientX : (moveEvent as MouseEvent).clientX;
+      const moveClientY = 'touches' in moveEvent ? (moveEvent as TouchEvent).touches[0].clientY : (moveEvent as MouseEvent).clientY;
+      const deltaX = moveClientX - startClientX;
+      const deltaY = moveClientY - startClientY;
 
       let nextWidth = Math.max(MIN_WIDTH, startWidth + deltaX);
       let nextHeight = Math.max(MIN_WIDTH, startHeight + deltaY);
@@ -114,7 +123,7 @@ export class ImageNodeView implements NodeView {
       this.img.style.height = `${nextHeight}px`;
     };
 
-    const onUp = (upEvent: MouseEvent) => {
+    const onUp = (upEvent: MouseEvent | TouchEvent) => {
       const pos = this.getPos();
       this.dragging = false;
       this.dragCleanup?.();
@@ -143,11 +152,15 @@ export class ImageNodeView implements NodeView {
     };
 
     window.addEventListener('mousemove', onMove, { signal });
+    window.addEventListener('touchmove', onMove, { signal });
     window.addEventListener('mouseup', onUp, { once: true, signal });
+    window.addEventListener('touchend', onUp, { once: true, signal });
     window.addEventListener('blur', onWindowBlur, { once: true, signal });
     this.dragCleanup = () => {
       window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('touchmove', onMove);
       window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('touchend', onUp);
       window.removeEventListener('blur', onWindowBlur);
       this.dragAbortController?.abort();
     };

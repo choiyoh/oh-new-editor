@@ -8,6 +8,8 @@ export class TableGridPicker {
   readonly element = document.createElement('div');
   private hoveredRows = 0;
   private hoveredCols = 0;
+  private keyboardRows = 0;
+  private keyboardCols = 0;
   private isOpen = false;
 
   constructor(
@@ -16,17 +18,23 @@ export class TableGridPicker {
   ) {
     this.element.className = 'oh-editor__grid-picker';
     this.element.hidden = true;
+    this.element.tabIndex = -1;
     this.render();
+    this.element.addEventListener('keydown', this.handleKeyDown);
+    document.addEventListener('mousedown', this.handleClickOutside, true);
   }
 
   open(left: number, top: number) {
     this.isOpen = true;
     this.hoveredRows = 0;
     this.hoveredCols = 0;
+    this.keyboardRows = 0;
+    this.keyboardCols = 0;
     this.element.hidden = false;
     this.element.style.left = `${left}px`;
     this.element.style.top = `${top}px`;
     this.updateHighlight();
+    this.element.focus();
   }
 
   close() {
@@ -39,8 +47,70 @@ export class TableGridPicker {
   }
 
   destroy() {
+    document.removeEventListener('mousedown', this.handleClickOutside, true);
+    this.element.removeEventListener('keydown', this.handleKeyDown);
     this.element.remove();
   }
+
+  private readonly handleKeyDown = (event: KeyboardEvent) => {
+    if (!this.isOpen) return;
+
+    switch (event.key) {
+      case 'ArrowRight':
+        event.preventDefault();
+        this.keyboardCols = this.hoveredCols < MAX_GRID ? this.hoveredCols + 1 : this.hoveredCols;
+        this.hoveredCols = this.keyboardCols;
+        if (this.keyboardRows === 0) this.keyboardRows = 1;
+        this.hoveredRows = this.keyboardRows;
+        this.updateHighlight();
+        break;
+      case 'ArrowLeft':
+        event.preventDefault();
+        this.keyboardCols = this.hoveredCols > 1 ? this.hoveredCols - 1 : this.hoveredCols;
+        this.hoveredCols = this.keyboardCols;
+        if (this.keyboardRows === 0) this.keyboardRows = 1;
+        this.hoveredRows = this.keyboardRows;
+        this.updateHighlight();
+        break;
+      case 'ArrowDown':
+        event.preventDefault();
+        this.keyboardRows = this.hoveredRows < MAX_GRID ? this.hoveredRows + 1 : this.hoveredRows;
+        this.hoveredRows = this.keyboardRows;
+        if (this.keyboardCols === 0) this.keyboardCols = 1;
+        this.hoveredCols = this.keyboardCols;
+        this.updateHighlight();
+        break;
+      case 'ArrowUp':
+        event.preventDefault();
+        this.keyboardRows = this.hoveredRows > 1 ? this.hoveredRows - 1 : this.hoveredRows;
+        this.hoveredRows = this.keyboardRows;
+        if (this.keyboardCols === 0) this.keyboardCols = 1;
+        this.hoveredCols = this.keyboardCols;
+        this.updateHighlight();
+        break;
+      case 'Enter':
+        event.preventDefault();
+        if (this.hoveredRows > 0 && this.hoveredCols > 0) {
+          const rows = this.hoveredRows;
+          const cols = this.hoveredCols;
+          this.close();
+          insertTable(rows, cols, this.limits)(this.view.state, this.view.dispatch);
+          this.view.focus();
+        }
+        break;
+      case 'Escape':
+        event.preventDefault();
+        this.close();
+        break;
+    }
+  };
+
+  private readonly handleClickOutside = (event: MouseEvent) => {
+    if (!this.isOpen) return;
+    if (!this.element.contains(event.target as Node)) {
+      this.close();
+    }
+  };
 
   private render() {
     const grid = document.createElement('div');
@@ -55,6 +125,8 @@ export class TableGridPicker {
         cell.addEventListener('mouseenter', () => {
           this.hoveredRows = row + 1;
           this.hoveredCols = col + 1;
+          this.keyboardRows = this.hoveredRows;
+          this.keyboardCols = this.hoveredCols;
           this.updateHighlight();
         });
         cell.addEventListener('click', () => {

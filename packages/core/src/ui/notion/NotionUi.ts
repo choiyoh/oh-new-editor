@@ -20,6 +20,7 @@ import {
 } from '../../commands';
 import type { EditorToolbarAction, EditorToolbarController } from '../../types';
 import { toolbarIcons } from '../icons';
+import { LinkEditor } from '../LinkEditor';
 import { TableGridPicker } from '../menus/TableGridPicker';
 
 type NotionUiOptions = {
@@ -99,6 +100,14 @@ function isLinkAtCursor(state: EditorState) {
   return Boolean(state.schema.marks.link?.isInSet(marks));
 }
 
+function getActiveLinkHref(state: EditorState): string | null {
+  const linkMark = state.schema.marks.link;
+  if (!linkMark) return null;
+  const marks = state.storedMarks ?? state.selection.$from.marks();
+  const link = linkMark.isInSet(marks);
+  return link?.attrs.href ?? null;
+}
+
 export class NotionUi implements EditorToolbarController {
   readonly element = document.createElement('div');
 
@@ -112,6 +121,7 @@ export class NotionUi implements EditorToolbarController {
   private readonly onEditImageAlt?: () => void;
   private readonly tableLimits?: { maxRows?: number; maxCols?: number };
   private gridPicker: TableGridPicker | null = null;
+  private linkEditor: LinkEditor = new LinkEditor();
 
   private getOverlayRect() {
     return (this.element.parentElement ?? this.view.dom.parentElement ?? document.body).getBoundingClientRect();
@@ -151,6 +161,7 @@ export class NotionUi implements EditorToolbarController {
     this.bubble.className = 'oh-editor__bubble-toolbar';
     this.bubble.hidden = true;
     this.renderBubble();
+    this.ensureBubbleDom();
 
     this.slash.className = 'oh-editor__slash-menu';
     this.slash.hidden = true;
@@ -202,6 +213,7 @@ export class NotionUi implements EditorToolbarController {
     this.view.dom.removeEventListener('keydown', this.handleKeyDown);
     this.view.dom.removeEventListener('input', this.handleInput);
     this.closeGridPicker();
+    this.linkEditor.close();
     this.codeLanguage.remove();
     this.element.remove();
   }
@@ -226,6 +238,32 @@ export class NotionUi implements EditorToolbarController {
       this.gridPicker.destroy();
       this.gridPicker = null;
     }
+  }
+
+  private openLinkEditor() {
+    const container = this.element;
+    const coords = this.view.coordsAtPos(this.view.state.selection.from);
+    const existingHref = getActiveLinkHref(this.view.state);
+
+    this.linkEditor.open({
+      container,
+      coords: { left: coords.left, top: coords.bottom + 4 },
+      anchorHref: existingHref ?? undefined,
+      onConfirm: (href) => {
+        run(this.view, toggleLink(href));
+        this.view.focus();
+        this.sync();
+      },
+      onRemove: existingHref ? () => {
+        run(this.view, toggleLink(existingHref));
+        this.view.focus();
+        this.sync();
+      } : undefined,
+      onClose: () => {
+        this.view.focus();
+        this.sync();
+      }
+    });
   }
 
   private readonly handleInput = () => {
@@ -272,6 +310,9 @@ export class NotionUi implements EditorToolbarController {
     context: 'text' | 'image' | 'link';
   }[] = [];
 
+  private bubbleButtons: HTMLButtonElement[] = [];
+  private bubbleInitialized = false;
+
   private renderBubble() {
     this.bubbleActions = [
       { icon: toolbarIcons.bold, title: 'Bold', action: () => run(this.view, toggleBold()), isActive: () => hasMark(this.view.state, 'strong'), context: 'text' },
@@ -279,12 +320,35 @@ export class NotionUi implements EditorToolbarController {
       { icon: toolbarIcons.underline, title: 'Underline', action: () => run(this.view, toggleUnderline()), isActive: () => hasMark(this.view.state, 'underline'), context: 'text' },
       { icon: toolbarIcons.strike, title: 'Strikethrough', action: () => run(this.view, toggleStrike()), isActive: () => hasMark(this.view.state, 'strike'), context: 'text' },
       { icon: toolbarIcons.inlineCode, title: 'Inline code', action: () => run(this.view, toggleCode()), isActive: () => hasMark(this.view.state, 'code'), context: 'text' },
-      { icon: toolbarIcons.link, title: 'Link', action: () => { const href = window.prompt('Enter URL', 'https://'); if (!href) return false; return run(this.view, toggleLink(href)); }, isActive: () => hasMark(this.view.state, 'link'), context: 'text' },
+      { icon: toolbarIcons.link, title: 'Link', action: () => { this.openLinkEditor(); }, isActive: () => hasMark(this.view.state, 'link'), context: 'text' },
       { icon: toolbarIcons.bulletList, title: 'Bullet list', action: () => run(this.view, toggleBulletList()), isActive: () => isBlockActive(this.view.state, 'bullet_list'), context: 'text' },
       { icon: toolbarIcons.orderedList, title: 'Ordered list', action: () => run(this.view, toggleOrderedList()), isActive: () => isBlockActive(this.view.state, 'ordered_list'), context: 'text' },
       { icon: toolbarIcons.quote, title: 'Blockquote', action: () => run(this.view, toggleBlockquote()), isActive: () => isBlockActive(this.view.state, 'blockquote'), context: 'text' },
       { icon: toolbarIcons.alt, title: 'Edit alt text', action: () => { this.onEditImageAlt?.(); }, isActive: () => false, context: 'image' }
     ];
+  }
+
+  private ensureBubbleDom() {
+    if (this.bubbleInitialized) return;
+    this.bubbleInitialized = true;
+
+    for (const { icon, title, action, isActive } of this.bubbleActions) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'oh-editor__button';
+      button.innerHTML = icon;
+      button.title = title;
+      button.setAttribute('aria-label', title);
+      button.addEventListener('mousedown', (event) => {
+        event.preventDefault();
+        if (this.readOnly) return;
+        action();
+        this.view.focus();
+        this.sync();
+      });
+      this.bubbleButtons.push(button);
+      this.bubble.append(button);
+    }
   }
 
   private getBubbleContext(): 'text' | 'image' | 'link' {
@@ -293,48 +357,50 @@ export class NotionUi implements EditorToolbarController {
     return 'text';
   }
 
-  private rebuildBubble() {
-    const context = this.getBubbleContext();
-    this.bubble.replaceChildren();
-
-    const visible = this.bubbleActions.filter((a) => {
-      if (context === 'image') return a.context === 'image';
-      if (context === 'link') return a.context === 'text';
-      return a.context === 'text';
-    });
-
-    for (const { icon, title, action, isActive } of visible) {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'oh-editor__button';
-      button.innerHTML = icon;
-      button.title = title;
-      button.setAttribute('aria-label', title);
-      button.dataset.active = isActive() ? 'true' : 'false';
-      button.addEventListener('mousedown', (event) => {
-        event.preventDefault();
-        if (this.readOnly) return;
-        action();
-        this.view.focus();
-        this.sync();
-      });
-      this.bubble.append(button);
-    }
-  }
-
   private syncBubble() {
     const { selection } = this.view.state;
     const shouldShow = !this.readOnly && !selection.empty && selection.from !== selection.to;
+
+    // Exit animation when hiding
     if (!shouldShow) {
-      this.bubble.hidden = true;
+      if (!this.bubble.hidden) {
+        this.bubble.classList.add('oh-editor__bubble-toolbar--exit');
+        const onAnimationEnd = () => {
+          this.bubble.classList.remove('oh-editor__bubble-toolbar--exit');
+          this.bubble.hidden = true;
+          this.bubble.removeEventListener('animationend', onAnimationEnd);
+        };
+        this.bubble.addEventListener('animationend', onAnimationEnd);
+      }
       return;
     }
 
-    this.rebuildBubble();
+    // Remove exit class when showing
+    this.bubble.classList.remove('oh-editor__bubble-toolbar--exit');
 
+    this.ensureBubbleDom();
+    const context = this.getBubbleContext();
+
+    // Update each button's visibility and active state
+    for (let i = 0; i < this.bubbleActions.length; i++) {
+      const action = this.bubbleActions[i];
+      const button = this.bubbleButtons[i];
+
+      let visible = false;
+      if (context === 'image') visible = action.context === 'image';
+      else if (context === 'link') visible = action.context === 'text';
+      else visible = action.context === 'text';
+
+      button.hidden = !visible;
+      if (visible) {
+        button.disabled = this.readOnly;
+        button.dataset.active = action.isActive() ? 'true' : 'false';
+      }
+    }
+
+    this.bubble.hidden = false;
     const start = this.view.coordsAtPos(selection.from);
     const end = this.view.coordsAtPos(selection.to);
-    this.bubble.hidden = false;
     this.placeOverlay(this.bubble, {
       left: (start.left + end.right) / 2,
       top: Math.min(start.top, end.top)
@@ -361,6 +427,13 @@ export class NotionUi implements EditorToolbarController {
       this.placeOverlay(this.codeLanguage, coords, {
         offsetY: -this.codeLanguage.offsetHeight - 8
       });
+
+      // Enforce minimum top offset to avoid overlapping toolbar
+      const minTop = 56;
+      const currentTop = parseFloat(this.codeLanguage.style.top) || 0;
+      if (currentTop < minTop) {
+        this.codeLanguage.style.top = `${minTop}px`;
+      }
       return;
     }
 
@@ -454,6 +527,8 @@ export class NotionUi implements EditorToolbarController {
     const visibleItems = this.getVisibleSlashItems();
     this.slashList.replaceChildren();
 
+    const match = getSlashMatch(this.view.state);
+    const query = match?.query.trim().toLowerCase() ?? '';
     let lastCategory = '';
 
     visibleItems.forEach((item, index) => {
@@ -476,8 +551,17 @@ export class NotionUi implements EditorToolbarController {
       icon.innerHTML = item.icon;
       copy.className = 'oh-editor__slash-item-copy';
       label.className = 'oh-editor__slash-item-label';
-      label.textContent = item.label;
       copy.append(label);
+
+      if (query && item.label.toLowerCase().includes(query)) {
+        const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        label.innerHTML = item.label.replace(
+          new RegExp(`(${escaped})`, 'i'),
+          '<mark class="oh-editor__slash-item-highlight">$1</mark>'
+        );
+      } else {
+        label.textContent = item.label;
+      }
 
       if (item.description) {
         const description = document.createElement('span');
