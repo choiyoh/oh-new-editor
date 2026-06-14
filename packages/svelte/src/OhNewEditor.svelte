@@ -8,6 +8,7 @@
   let host: HTMLDivElement;
   let editor: Editor | null = null;
   let currentValue = value;
+  let isFocused = false;
 
   const dispatch = createEventDispatcher<{ change: string }>();
 
@@ -23,6 +24,14 @@
       currentValue = nextValue;
       dispatch('change', nextValue);
     });
+
+    editor.on('focus', () => {
+      isFocused = true;
+    });
+
+    editor.on('blur', () => {
+      isFocused = false;
+    });
   });
 
   onDestroy(() => {
@@ -30,9 +39,17 @@
     editor = null;
   });
 
-  $: if (editor && value !== undefined && value !== currentValue) {
+  $: if (editor && value !== undefined && value !== currentValue && !isFocused) {
     editor.setContent(value, options?.outputFormat ?? 'html');
     currentValue = value;
+  }
+
+  $: if (editor && options?.readOnly !== undefined) {
+    editor.setReadOnly(options.readOnly);
+  }
+
+  $: if (editor && options?.outputFormat) {
+    editor.setOutputFormat(options.outputFormat);
   }
 </script>
 

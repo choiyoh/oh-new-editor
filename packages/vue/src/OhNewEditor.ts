@@ -13,6 +13,10 @@ import { createEditor, type Editor, type EditorOptions } from '@oh-new-editor/co
 export const OhNewEditor = defineComponent({
   name: 'OhNewEditor',
   props: {
+    modelValue: {
+      type: String,
+      required: false
+    },
     value: {
       type: String,
       required: false
@@ -22,24 +26,36 @@ export const OhNewEditor = defineComponent({
       required: false
     }
   },
-  emits: ['change'],
+  emits: ['change', 'update:modelValue'],
   setup(props, { emit, expose }) {
     const host = ref<HTMLElement | null>(null);
     const editor = shallowRef<Editor | null>(null);
-    const currentValue = ref<string | undefined>(props.value);
+    const currentValue = ref<string | undefined>(props.modelValue ?? props.value);
+    const isFocused = ref(false);
+
+    const resolvedValue = () => props.modelValue ?? props.value;
 
     onMounted(() => {
       if (!host.value) return;
 
       const instance = createEditor(host.value, {
         ...props.options,
-        initialContent: props.value ?? props.options?.initialContent
+        initialContent: resolvedValue() ?? props.options?.initialContent
       });
 
       instance.on('change', () => {
         const nextValue = instance.getContent(props.options?.outputFormat ?? 'html');
         currentValue.value = nextValue;
         emit('change', nextValue);
+        emit('update:modelValue', nextValue);
+      });
+
+      instance.on('focus', () => {
+        isFocused.value = true;
+      });
+
+      instance.on('blur', () => {
+        isFocused.value = false;
       });
 
       editor.value = instance;
@@ -51,11 +67,30 @@ export const OhNewEditor = defineComponent({
     });
 
     watch(
-      () => props.value,
+      () => resolvedValue(),
       (value) => {
         if (!editor.value || value === undefined || value === currentValue.value) return;
+        if (isFocused.value) return;
         editor.value.setContent(value, props.options?.outputFormat ?? 'html');
         currentValue.value = value;
+      }
+    );
+
+    watch(
+      () => props.options?.readOnly,
+      (readOnly) => {
+        if (readOnly !== undefined) {
+          editor.value?.setReadOnly(readOnly);
+        }
+      }
+    );
+
+    watch(
+      () => props.options?.outputFormat,
+      (outputFormat) => {
+        if (outputFormat) {
+          editor.value?.setOutputFormat(outputFormat);
+        }
       }
     );
 

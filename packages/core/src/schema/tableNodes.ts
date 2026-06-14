@@ -1,9 +1,8 @@
-import type { SchemaSpec } from 'prosemirror-model';
 import { tableNodes } from 'prosemirror-tables';
 
 import { nodes as baseNodes } from './nodes';
 
-export const tableEnabledNodes: SchemaSpec<any, any>['nodes'] = (baseNodes as { append: (value: SchemaSpec<any, any>['nodes']) => SchemaSpec<any, any>['nodes'] }).append(
+export const tableEnabledNodes = (baseNodes as { append: <T>(value: T) => T }).append(
   tableNodes({
     tableGroup: 'block',
     cellContent: 'block+',

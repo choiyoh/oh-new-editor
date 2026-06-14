@@ -49,12 +49,39 @@ const ALLOWED_ATTR = [
   'width'
 ];
 
-function getSanitizer() {
-  return createDOMPurify(window);
+const ALLOWED_CSS_PROPERTIES = ['font-size', 'background-color'];
+
+function createSanitizer() {
+  const purify = createDOMPurify(window);
+
+  purify.addHook('afterSanitizeAttributes', (node) => {
+    if (!(node instanceof HTMLElement) || !node.hasAttribute('style')) return;
+
+    const el = node as HTMLElement;
+    const allowed: string[] = [];
+
+    for (let i = 0; i < el.style.length; i++) {
+      const camel = el.style[i];
+      const dashed = camel.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+      if (ALLOWED_CSS_PROPERTIES.includes(dashed)) {
+        allowed.push(`${dashed}:${el.style.getPropertyValue(dashed)}`);
+      }
+    }
+
+    if (allowed.length > 0) {
+      el.setAttribute('style', allowed.join(';'));
+    } else {
+      el.removeAttribute('style');
+    }
+  });
+
+  return purify;
 }
 
+const sanitizer = createSanitizer();
+
 export function sanitizeHtml(html: string) {
-  return getSanitizer().sanitize(html, {
+  return sanitizer.sanitize(html, {
     ALLOWED_TAGS,
     ALLOWED_ATTR,
     ALLOW_UNKNOWN_PROTOCOLS: false,

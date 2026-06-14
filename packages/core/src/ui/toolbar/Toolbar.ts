@@ -226,7 +226,8 @@ export class Toolbar {
             const linkButton = this.element.querySelector<HTMLElement>('[aria-label="Insert link"]');
             if (!linkButton) return false;
             const btnRect = linkButton.getBoundingClientRect();
-            const container = this.element.parentElement!;
+            const container = this.element.parentElement;
+            if (!container) return false;
             const existingHref = getActiveLinkHref(this.view.state);
 
             this.linkEditor.open({

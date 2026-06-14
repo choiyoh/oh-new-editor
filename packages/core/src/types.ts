@@ -102,6 +102,10 @@ export interface EditorOptions {
   placeholder?: string;
   image?: EditorImageOptions;
   readOnly?: boolean;
+  /** Custom ProseMirror plugins to register. */
+  plugins?: Plugin[];
+  /** Custom ProseMirror schema (overrides table schema and default). */
+  schema?: Schema;
 }
 
 export type EditorEventName = 'change' | 'focus' | 'blur' | 'ready';

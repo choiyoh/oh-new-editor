@@ -80,6 +80,6 @@ const image: NodeSpec = {
   }
 };
 
-export const nodes: SchemaSpec<any, any>['nodes'] = addListNodes(basicSchema.spec.nodes, 'paragraph block*', 'block')
+export const nodes: SchemaSpec['nodes'] = addListNodes(basicSchema.spec.nodes, 'paragraph block*', 'block')
   .update('code_block', codeBlock)
   .update('image', image);

@@ -86,7 +86,7 @@ const safeLink: MarkSpec = {
   }
 };
 
-export const marks: SchemaSpec<any, any>['marks'] = basicSchema.spec.marks
+export const marks: SchemaSpec['marks'] = basicSchema.spec.marks
   .update('link', safeLink)
   .addToEnd('underline', underline)
   .addToEnd('strike', strike)

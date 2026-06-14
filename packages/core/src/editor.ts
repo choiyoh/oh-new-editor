@@ -38,6 +38,7 @@ function createPlugins(options: EditorOptions) {
     createKeymapPlugin(),
     createBaseKeymapPlugin(),
     ...(options.table?.plugins ?? []),
+    ...(options.plugins ?? []),
     options.placeholder ? createPlaceholderPlugin(options.placeholder) : null
   ].filter((plugin): plugin is Plugin => Boolean(plugin));
 }
@@ -63,7 +64,7 @@ class ProseMirrorEditor implements Editor {
   constructor(host: HTMLElement, options: EditorOptions = {}) {
     this.host = host;
     this.options = options;
-    this.schema = options.table?.schema ?? editorSchema;
+    this.schema = options.schema ?? options.table?.schema ?? editorSchema;
     this.content = document.createElement('div');
     this.content.className = 'oh-editor__content';
     this.plugins = createPlugins(options);
