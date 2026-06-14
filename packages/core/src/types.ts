@@ -91,6 +91,34 @@ export interface EditorToolbarSupport {
   }): EditorToolbarController;
 }
 
+export type EditorStyle = 'toolbar' | 'notion';
+
+export type EditorStyleMap = Record<EditorStyle, EditorToolbarSupport>;
+
+export interface AIContext {
+  documentContent: string;
+  selectedText: string;
+  textBefore: string;
+  textAfter: string;
+  cursorOffset: number;
+  outputFormat: 'html' | 'markdown';
+}
+
+export type AIGenerationMode = 'insert' | 'replace';
+
+export interface EditorAIOptions {
+  onGenerate: (prompt: string, context: AIContext, signal: AbortSignal) => Promise<string>;
+  onStream?: (prompt: string, context: AIContext, signal: AbortSignal) => AsyncIterable<string>;
+  suggestions?: boolean;
+}
+
+export interface EditorAIController {
+  generate(prompt?: string): Promise<void>;
+  getContext(): AIContext;
+  cancel(): void;
+  readonly isGenerating: boolean;
+}
+
 export interface EditorOptions {
   initialContent?: string;
   outputFormat?: 'html' | 'markdown';
@@ -98,6 +126,8 @@ export interface EditorOptions {
   table?: EditorTableSupport;
   toolbar?: EditorToolbarSupport;
   style?: 'toolbar' | 'notion';
+  /** Factory map for runtime UI mode switching. e.g. { toolbar: createToolbarSupport(), notion: createNotionSupport() } */
+  styles?: EditorStyleMap;
   fontSizes?: number[];
   placeholder?: string;
   image?: EditorImageOptions;
@@ -106,6 +136,8 @@ export interface EditorOptions {
   plugins?: Plugin[];
   /** Custom ProseMirror schema (overrides table schema and default). */
   schema?: Schema;
+  /** AI collaboration hooks. */
+  ai?: EditorAIOptions;
 }
 
 export type EditorEventName = 'change' | 'focus' | 'blur' | 'ready';
@@ -121,4 +153,9 @@ export interface Editor {
   on(event: EditorEventName, handler: EditorEventHandler): void;
   off(event: EditorEventName, handler: EditorEventHandler): void;
   destroy(): void;
+  readonly ai: EditorAIController | null;
+  /** Switch editor UI style at runtime without destroying state. */
+  setStyle(style: EditorStyle): void;
+  /** Current editor UI style. */
+  getStyle(): EditorStyle;
 }

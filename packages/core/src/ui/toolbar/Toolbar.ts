@@ -137,6 +137,21 @@ export class Toolbar {
   private readOnly = false;
   private linkEditor: LinkEditor = new LinkEditor();
 
+  private readonly toolbarGroups: HTMLElement[] = [];
+  private readonly groupWidths = new Map<HTMLElement, number>();
+  private readonly groupPriorities: number[] = [];
+  private blockGroupIndex = -1;
+
+  private overflowContainer = document.createElement('div');
+  private overflowButton = document.createElement('button');
+  private overflowGroup = document.createElement('div');
+  private overflowOpen = false;
+  private resizeObserver: ResizeObserver | null = null;
+
+  private readonly boundUpdateOverflow = () => this.updateOverflow();
+  private readonly boundHandleDocumentMouseDown = (event: MouseEvent) => this.handleDocumentMouseDown(event);
+  private readonly boundHandleKeydown = (event: KeyboardEvent) => this.handleToolbarKeydown(event);
+
   constructor(
     private readonly view: EditorView,
     options: {
@@ -163,6 +178,7 @@ export class Toolbar {
     this.element.setAttribute('aria-orientation', 'horizontal');
 
     this.renderToolbar(options.fontSizes ?? DEFAULT_FONT_SIZES);
+    this.setupOverflow();
     this.sync();
   }
 
@@ -179,6 +195,7 @@ export class Toolbar {
       const isAltButton = button.dataset.role === 'image-alt';
       button.disabled = this.readOnly || (isImageButton && !this.canUploadImages) || (isAltButton && !isImageSelected(state)) || (config.isEnabled ? !config.isEnabled(state) : false) || button.dataset.busy === 'true';
       button.dataset.active = config.isActive?.(state) ? 'true' : 'false';
+      button.setAttribute('aria-pressed', button.dataset.active);
 
       if (isAltButton) {
         button.hidden = !isImageSelected(state);
@@ -192,28 +209,55 @@ export class Toolbar {
     this.fontSizeSelect.value = String(getActiveFontSize(state));
 
     const inCodeBlock = isInCodeBlock(state);
+    const wasCodeLanguageHidden = this.codeLanguageGroup.hidden;
     this.codeLanguageGroup.hidden = !inCodeBlock;
     this.codeLanguageSelect.disabled = this.readOnly || !inCodeBlock;
     this.codeLanguageSelect.value = getActiveCodeLanguage(state);
+
+    if (wasCodeLanguageHidden !== this.codeLanguageGroup.hidden) {
+      requestAnimationFrame(() => this.updateOverflow());
+    }
   }
 
   destroy() {
     this.closeGridPicker();
     this.linkEditor.close();
+
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect();
+      this.resizeObserver = null;
+    }
+
+    window.removeEventListener('resize', this.boundUpdateOverflow);
+    document.removeEventListener('mousedown', this.boundHandleDocumentMouseDown);
+    this.element.removeEventListener('keydown', this.boundHandleKeydown);
+
     this.element.remove();
     this.actions.clear();
   }
 
   private renderToolbar(fontSizes: number[]) {
-    this.element.append(
-      this.renderGroup([
+    const historyGroup = this.renderGroup(
+      [
         { label: toolbarIcons.undo, title: 'Undo', command: (view) => undo(view.state, view.dispatch) },
         { label: toolbarIcons.redo, title: 'Redo', command: (view) => redo(view.state, view.dispatch) }
-      ]),
-      this.renderBlockSelect(),
-      this.renderFontSizeSelect(fontSizes),
-      this.renderCodeLanguageSelect(),
-      this.renderGroup([
+      ],
+      'History'
+    );
+    historyGroup.dataset.priority = '3';
+
+    const blockGroup = this.renderBlockSelect();
+    blockGroup.dataset.priority = '0';
+    this.blockGroupIndex = 1;
+
+    const fontSizeGroup = this.renderFontSizeSelect(fontSizes);
+    fontSizeGroup.dataset.priority = '3';
+
+    const codeLanguageGroup = this.renderCodeLanguageSelect();
+    codeLanguageGroup.dataset.priority = '2';
+
+    const marksGroup = this.renderGroup(
+      [
         { label: toolbarIcons.bold, title: 'Bold', command: (view) => run(view, toggleBold()), isActive: (state) => hasMark(state, 'strong') },
         { label: toolbarIcons.italic, title: 'Italic', command: (view) => run(view, toggleItalic()), isActive: (state) => hasMark(state, 'em') },
         { label: toolbarIcons.underline, title: 'Underline', command: (view) => run(view, toggleUnderline()), isActive: (state) => hasMark(state, 'underline') },
@@ -253,19 +297,37 @@ export class Toolbar {
           },
           isActive: (state) => hasMark(state, 'link')
         }
-      ]),
-      this.renderGroup([
+      ],
+      'Text formatting'
+    );
+    marksGroup.dataset.priority = '1';
+
+    const listBlockGroup = this.renderGroup(
+      [
         { label: toolbarIcons.bulletList, title: 'Bullet list', command: (view) => run(view, toggleBulletList()), isActive: (state) => isBlockActive(state, 'bullet_list') },
         { label: toolbarIcons.orderedList, title: 'Ordered list', command: (view) => run(view, toggleOrderedList()), isActive: (state) => isBlockActive(state, 'ordered_list') },
         { label: toolbarIcons.quote, title: 'Blockquote', command: (view) => run(view, toggleBlockquote()), isActive: (state) => isBlockActive(state, 'blockquote') },
         { label: toolbarIcons.codeBlock, title: 'Code block', command: (view) => run(view, insertCodeBlock()), isActive: (state) => isBlockActive(state, 'code_block') },
         { label: toolbarIcons.horizontalRule, title: 'Horizontal rule', command: (view) => run(view, insertHR()) }
-      ]),
-      this.renderInsertGroup()
+      ],
+      'Lists and blocks'
     );
+    listBlockGroup.dataset.priority = '2';
+
+    const insertGroup = this.renderInsertGroup();
+    insertGroup.dataset.priority = '2';
+
+    this.toolbarGroups.push(historyGroup, blockGroup, fontSizeGroup, codeLanguageGroup, marksGroup, listBlockGroup, insertGroup);
+    this.groupPriorities.push(3, 0, 3, 2, 1, 2, 2);
+
+    this.element.append(historyGroup, blockGroup, fontSizeGroup, codeLanguageGroup, marksGroup, listBlockGroup, insertGroup);
 
     if (this.tableActions.length) {
-      this.element.append(this.renderTableGroup());
+      const tableGroup = this.renderTableGroup();
+      tableGroup.dataset.priority = '2';
+      this.toolbarGroups.push(tableGroup);
+      this.groupPriorities.push(2);
+      this.element.append(tableGroup);
     }
   }
 
@@ -286,6 +348,7 @@ export class Toolbar {
     `;
     imageButton.title = 'Upload image';
     imageButton.setAttribute('aria-label', 'Upload image');
+    imageButton.setAttribute('aria-pressed', 'false');
     imageButton.dataset.role = 'image';
     imageButton.addEventListener('mousedown', (event) => {
       event.preventDefault();
@@ -311,6 +374,7 @@ export class Toolbar {
     altButton.innerHTML = toolbarIcons.alt;
     altButton.title = 'Edit image alt text';
     altButton.setAttribute('aria-label', 'Edit image alt text');
+    altButton.setAttribute('aria-pressed', 'false');
     altButton.dataset.role = 'image-alt';
     altButton.addEventListener('mousedown', (event) => {
       event.preventDefault();
@@ -341,6 +405,7 @@ export class Toolbar {
         tableButton.innerHTML = action.label;
         tableButton.title = action.title;
         tableButton.setAttribute('aria-label', action.title);
+        tableButton.setAttribute('aria-pressed', 'false');
         tableButton.addEventListener('mousedown', (event) => {
           event.preventDefault();
           if (this.readOnly) return;
@@ -486,6 +551,8 @@ export class Toolbar {
 
   private renderCodeLanguageSelect() {
     this.codeLanguageGroup.className = 'oh-editor__toolbar-group';
+    this.codeLanguageGroup.setAttribute('role', 'group');
+    this.codeLanguageGroup.setAttribute('aria-label', 'Code block language');
 
     for (const language of DEFAULT_CODE_LANGUAGES) {
       const option = document.createElement('option');
@@ -510,10 +577,13 @@ export class Toolbar {
     return this.codeLanguageGroup;
   }
 
-  private renderGroup(configs: ToolbarActionConfig[]) {
+  private renderGroup(configs: ToolbarActionConfig[], ariaLabel?: string) {
     const group = document.createElement('div');
     group.className = 'oh-editor__toolbar-group';
     group.setAttribute('role', 'group');
+    if (ariaLabel) {
+      group.setAttribute('aria-label', ariaLabel);
+    }
 
     for (const config of configs) {
       this.appendActionButton(group, config);
@@ -529,6 +599,7 @@ export class Toolbar {
     button.innerHTML = config.label;
     button.title = config.title;
     button.setAttribute('aria-label', config.title);
+    button.setAttribute('aria-pressed', 'false');
     button.addEventListener('mousedown', (event) => {
       event.preventDefault();
       if (this.readOnly) return;
@@ -550,5 +621,194 @@ export class Toolbar {
     });
     this.actions.set(button, config);
     group.append(button);
+  }
+
+  private setupOverflow() {
+    const overflowId = `oh-editor-toolbar-overflow-${Math.random().toString(36).slice(2, 9)}`;
+
+    this.overflowContainer.className = 'oh-editor__toolbar-overflow';
+    this.overflowContainer.id = overflowId;
+    this.overflowContainer.setAttribute('aria-hidden', 'true');
+
+    this.overflowButton.type = 'button';
+    this.overflowButton.className = 'oh-editor__button oh-editor__toolbar-overflow-button';
+    this.overflowButton.innerHTML = '&#8942;';
+    this.overflowButton.title = 'More';
+    this.overflowButton.setAttribute('aria-label', 'More');
+    this.overflowButton.setAttribute('aria-haspopup', 'true');
+    this.overflowButton.setAttribute('aria-expanded', 'false');
+    this.overflowButton.setAttribute('aria-controls', overflowId);
+    this.overflowButton.addEventListener('mousedown', (event) => {
+      event.preventDefault();
+      this.toggleOverflow();
+    });
+
+    this.overflowGroup.className = 'oh-editor__toolbar-group oh-editor__toolbar-group--overflow';
+    this.overflowGroup.setAttribute('role', 'group');
+    this.overflowGroup.setAttribute('aria-label', 'More actions');
+    this.overflowGroup.append(this.overflowButton, this.overflowContainer);
+    this.element.append(this.overflowGroup);
+
+    this.element.addEventListener('keydown', this.boundHandleKeydown);
+    document.addEventListener('mousedown', this.boundHandleDocumentMouseDown);
+    window.addEventListener('resize', this.boundUpdateOverflow);
+
+    if (typeof ResizeObserver !== 'undefined') {
+      this.resizeObserver = new ResizeObserver(this.boundUpdateOverflow);
+      this.resizeObserver.observe(this.element);
+    }
+
+    this.updateOverflow();
+  }
+
+  private updateOverflow() {
+    if (!this.element.isConnected || this.toolbarGroups.length === 0) {
+      return;
+    }
+
+    const toolbarStyle = getComputedStyle(this.element);
+    const toolbarRect = this.element.getBoundingClientRect();
+    const paddingH = parseFloat(toolbarStyle.paddingLeft) + parseFloat(toolbarStyle.paddingRight);
+    const available = Math.max(0, toolbarRect.width - paddingH);
+
+    for (const group of this.toolbarGroups) {
+      const width = group.getBoundingClientRect().width;
+      if (width > 0) {
+        this.groupWidths.set(group, width);
+      }
+    }
+
+    const totalWidth = this.toolbarGroups.reduce((sum, group) => sum + (this.groupWidths.get(group) ?? 0), 0);
+    const buttonSize = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--oh-editor-button-size')) || 32;
+    const overflowButtonWidth = buttonSize + 12;
+
+    const visible = new Set<number>(this.toolbarGroups.map((_, index) => index));
+    let visibleWidth = totalWidth;
+
+    if (totalWidth > available) {
+      const collapseOrder = this.toolbarGroups
+        .map((_, index) => index)
+        .sort((a, b) => {
+          const priorityDiff = (this.groupPriorities[b] ?? 2) - (this.groupPriorities[a] ?? 2);
+          if (priorityDiff !== 0) return priorityDiff;
+          return b - a;
+        });
+
+      for (const index of collapseOrder) {
+        if (visible.size <= 1 && visible.has(this.blockGroupIndex)) {
+          break;
+        }
+        if (!visible.has(index)) continue;
+        if (index === this.blockGroupIndex) continue;
+
+        visible.delete(index);
+        visibleWidth -= this.groupWidths.get(this.toolbarGroups[index]) ?? 0;
+
+        if (visibleWidth + overflowButtonWidth <= available) {
+          break;
+        }
+      }
+    }
+
+    const hasOverflow = visible.size < this.toolbarGroups.length;
+    const visibleIndices: number[] = [];
+    const overflowIndices: number[] = [];
+
+    for (let i = 0; i < this.toolbarGroups.length; i++) {
+      if (visible.has(i)) {
+        visibleIndices.push(i);
+      } else {
+        overflowIndices.push(i);
+      }
+    }
+
+    const visibleFragment = document.createDocumentFragment();
+    for (const index of visibleIndices) {
+      visibleFragment.appendChild(this.toolbarGroups[index]);
+    }
+    this.element.insertBefore(visibleFragment, this.overflowGroup);
+
+    const overflowFragment = document.createDocumentFragment();
+    for (const index of overflowIndices) {
+      overflowFragment.appendChild(this.toolbarGroups[index]);
+    }
+    this.overflowContainer.append(overflowFragment);
+
+    this.overflowGroup.hidden = !hasOverflow;
+
+    if (!hasOverflow && this.overflowOpen) {
+      this.closeOverflow();
+    }
+  }
+
+  private toggleOverflow() {
+    if (this.overflowOpen) {
+      this.closeOverflow();
+    } else {
+      this.openOverflow();
+    }
+  }
+
+  private openOverflow() {
+    this.overflowOpen = true;
+    this.overflowContainer.classList.add('is-open');
+    this.overflowContainer.setAttribute('aria-hidden', 'false');
+    this.overflowButton.setAttribute('aria-expanded', 'true');
+  }
+
+  private closeOverflow() {
+    this.overflowOpen = false;
+    this.overflowContainer.classList.remove('is-open');
+    this.overflowContainer.setAttribute('aria-hidden', 'true');
+    this.overflowButton.setAttribute('aria-expanded', 'false');
+  }
+
+  private handleDocumentMouseDown(event: MouseEvent) {
+    if (!this.overflowOpen) return;
+    const target = event.target as Node;
+    if (!this.overflowGroup.contains(target)) {
+      this.closeOverflow();
+    }
+  }
+
+  private handleToolbarKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape') {
+      if (this.overflowOpen) {
+        event.preventDefault();
+        this.closeOverflow();
+        this.overflowButton.focus();
+      }
+      return;
+    }
+
+    const isHorizontal = event.key === 'ArrowRight' || event.key === 'ArrowLeft';
+    const isHomeEnd = event.key === 'Home' || event.key === 'End';
+    if (!isHorizontal && !isHomeEnd) return;
+
+    const target = event.target as HTMLElement;
+    if (target.tagName !== 'BUTTON') return;
+
+    const focusables = Array.from(
+      this.element.querySelectorAll<HTMLElement>('button:not([hidden]):not(:disabled), select:not([hidden]):not(:disabled)')
+    );
+
+    const index = focusables.indexOf(target);
+    if (index === -1) return;
+
+    let nextIndex = index;
+    if (event.key === 'ArrowRight') {
+      nextIndex = (index + 1) % focusables.length;
+    } else if (event.key === 'ArrowLeft') {
+      nextIndex = (index - 1 + focusables.length) % focusables.length;
+    } else if (event.key === 'Home') {
+      nextIndex = 0;
+    } else if (event.key === 'End') {
+      nextIndex = focusables.length - 1;
+    }
+
+    if (nextIndex !== index) {
+      event.preventDefault();
+      focusables[nextIndex].focus();
+    }
   }
 }

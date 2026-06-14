@@ -15,7 +15,8 @@ import { createPastePlugin } from './plugins/paste';
 import { createPlaceholderPlugin } from './plugins/placeholder';
 import { editorSchema } from './schema';
 import { serializeHtml } from './serializers/html';
-import type { Editor, EditorEventHandler, EditorEventName, EditorMenuController, EditorOptions, EditorSchema, EditorToolbarController } from './types';
+import type { Editor, EditorAIController, EditorAIOptions, EditorEventHandler, EditorEventName, EditorMenuController, EditorOptions, EditorSchema, EditorStyle, EditorStyleMap, EditorToolbarController, EditorToolbarSupport, AIContext } from './types';
+import { aiPluginKey, createAIPlugin } from './plugins/ai';
 import { createImageNodeView } from './ui/ImageNodeView';
 
 const DEFAULT_OUTPUT_FORMAT = 'html';
@@ -39,6 +40,7 @@ function createPlugins(options: EditorOptions) {
     createBaseKeymapPlugin(),
     ...(options.table?.plugins ?? []),
     ...(options.plugins ?? []),
+    options.ai ? createAIPlugin() : null,
     options.placeholder ? createPlaceholderPlugin(options.placeholder) : null
   ].filter((plugin): plugin is Plugin => Boolean(plugin));
 }
@@ -52,6 +54,8 @@ class ProseMirrorEditor implements Editor {
   private readonly plugins: Plugin[];
   private view: EditorView;
   private toolbar: EditorToolbarController | null = null;
+  private styleFactories: EditorStyleMap | null = null;
+  private currentStyle: EditorStyle = 'toolbar';
   private menuController: EditorMenuController | null = null;
   private outputFormat: 'html' | 'markdown';
   private readOnly = false;
@@ -60,6 +64,8 @@ class ProseMirrorEditor implements Editor {
   private readonly uploadLifecycle: UploadLifecycle = {
     isAlive: () => !this.destroyed
   };
+
+  readonly ai: EditorAIController | null = null;
 
   constructor(host: HTMLElement, options: EditorOptions = {}) {
     this.host = host;
@@ -81,24 +87,26 @@ class ProseMirrorEditor implements Editor {
 
     this.view = this.createView(this.parseContent(options.initialContent, this.outputFormat));
 
-    if (options.toolbar) {
-      this.toolbar = options.toolbar.createToolbar(this.view, {
-        fontSizes: options.fontSizes,
-        readOnly: this.readOnly,
-        canUploadImages: Boolean(options.image?.upload),
-        onPickImage: () => this.pickImage(),
-        onEditImageAlt: () => this.editSelectedImageAlt(),
-        insertActions: options.table?.insertActions,
-        tableActions: options.table?.actions,
-        tableLimits: options.table ? { maxRows: options.table.maxRows, maxCols: options.table.maxCols } : undefined
-      });
+    if (options.styles) {
+      this.styleFactories = options.styles;
+      const initial: EditorStyle = (options.style as EditorStyle) ?? 'toolbar';
+      // setStyle expects currentStyle !== style to actually do work, so set currentStyle first to trigger it
+      this.currentStyle = initial === 'toolbar' ? 'notion' : 'toolbar';
+      this.setStyle(initial);
+    } else if (options.toolbar) {
+      this.toolbar = options.toolbar.createToolbar(this.view, this.getToolbarContext());
       this.host.prepend(this.toolbar.element);
+      this.currentStyle = 'toolbar';
     }
 
     const menu = options.table?.createMenu?.(this.view);
     if (menu) {
       this.host.append(menu.element);
       this.menuController = menu;
+    }
+
+    if (options.ai) {
+      this.ai = this.createAIController(options.ai);
     }
 
     this.view.dom.addEventListener('focus', this.handleFocus);
@@ -128,9 +136,29 @@ class ProseMirrorEditor implements Editor {
     this.readOnly = readOnly;
 
     this.view.setProps({
-      editable: () => !this.readOnly
+      editable: () => this.isEditable()
     });
     this.toolbar?.setReadOnly(readOnly);
+  }
+
+  setStyle(style: EditorStyle): void {
+    if (this.destroyed) throw new Error('Editor is destroyed');
+    if (!this.styleFactories?.[style]) {
+      const registered = Object.keys(this.styleFactories ?? {}).join(', ');
+      throw new Error(`Unknown editor style: "${style}". Registered: ${registered}`);
+    }
+    if (style === this.currentStyle) return;
+
+    this.toolbar?.destroy();
+    this.toolbar = null;
+
+    this.toolbar = this.styleFactories[style].createToolbar(this.view, this.getToolbarContext());
+    this.host.prepend(this.toolbar.element);
+    this.currentStyle = style;
+  }
+
+  getStyle(): EditorStyle {
+    return this.currentStyle;
   }
 
   focus() {
@@ -151,6 +179,7 @@ class ProseMirrorEditor implements Editor {
 
   destroy() {
     this.destroyed = true;
+    this.ai?.cancel();
     this.view.dom.removeEventListener('focus', this.handleFocus);
     this.view.dom.removeEventListener('blur', this.handleBlur);
     this.host.removeEventListener('mousedown', this.handleHostMouseDown);
@@ -241,10 +270,23 @@ class ProseMirrorEditor implements Editor {
     );
   }
 
+  private getToolbarContext(): Parameters<EditorToolbarSupport['createToolbar']>[1] {
+    return {
+      fontSizes: this.options.fontSizes,
+      readOnly: this.readOnly,
+      canUploadImages: Boolean(this.options.image?.upload),
+      onPickImage: () => this.pickImage(),
+      onEditImageAlt: () => this.editSelectedImageAlt(),
+      insertActions: this.options.table?.insertActions,
+      tableActions: this.options.table?.actions,
+      tableLimits: this.options.table ? { maxRows: this.options.table.maxRows, maxCols: this.options.table.maxCols } : undefined
+    };
+  }
+
   private createView(doc = parseHtml(undefined, this.schema)) {
     return new EditorView(this.content, {
       state: this.createState(doc),
-      editable: () => !this.readOnly,
+      editable: () => this.isEditable(),
       nodeViews: {
         image: (node, view, getPos) => {
           if (typeof getPos !== 'function') {
@@ -294,6 +336,136 @@ class ProseMirrorEditor implements Editor {
         this.emit('change');
       }
     });
+  }
+
+  private isEditable() {
+    return !this.readOnly;
+  }
+
+  private getAIContext(): AIContext {
+    const doc = this.view.state.doc;
+    const { from, to } = this.view.state.selection;
+    const outputFormat = this.outputFormat;
+
+    let documentContent: string;
+    if (outputFormat === 'markdown') {
+      documentContent = this.getMarkdownSupport().serialize(doc);
+    } else {
+      documentContent = serializeHtml(doc, this.schema);
+    }
+
+    const selectedText = doc.textBetween(from, to);
+    const textBefore = doc.textBetween(0, from, '\n');
+    const textAfter = doc.textBetween(to, doc.content.size, '\n');
+    const cursorOffset = from;
+
+    return {
+      documentContent,
+      selectedText,
+      textBefore,
+      textAfter,
+      cursorOffset,
+      outputFormat
+    };
+  }
+
+  private createAIController(aiOptions: EditorAIOptions): EditorAIController {
+    let abortController: AbortController | null = null;
+    let isGenerating = false;
+
+    const controller: EditorAIController = {
+      get isGenerating() {
+        return isGenerating;
+      },
+
+      getContext: () => this.getAIContext(),
+
+      generate: async (prompt?: string) => {
+        if (!prompt || this.readOnly || this.destroyed) return;
+
+        isGenerating = true;
+        abortController = new AbortController();
+        const signal = abortController.signal;
+
+        // Lock editor as non-editable during active streaming
+        this.view.setProps({ editable: () => false });
+
+        const context = this.getAIContext();
+        const cursorPos = this.view.state.selection.from;
+
+        // Initialize AI streaming state in plugin
+        this.view.dispatch(
+          this.view.state.tr.setMeta(aiPluginKey, {
+            active: true,
+            startPos: cursorPos,
+            currentPos: cursorPos
+          })
+        );
+
+        try {
+          if (aiOptions.onStream) {
+            for await (const chunk of aiOptions.onStream(prompt, context, signal)) {
+              if (signal.aborted) break;
+              if (!chunk) continue;
+
+              const aiState = aiPluginKey.getState(this.view.state);
+              if (!aiState?.active) break;
+
+              const pos = aiState.currentPos;
+              const tr = this.view.state.tr.insertText(chunk, pos);
+              tr.setMeta('addToHistory', false);
+              tr.setMeta(aiPluginKey, { currentPos: pos + chunk.length });
+              this.view.dispatch(tr);
+            }
+          } else {
+            const result = await aiOptions.onGenerate(prompt, context, signal);
+            if (!signal.aborted && result) {
+              const tr = this.view.state.tr.insertText(result, cursorPos);
+              tr.setMeta('addToHistory', false);
+              this.view.dispatch(tr);
+            }
+          }
+        } catch (err) {
+          // On abort, let cancel() handle cleanup
+          if ((err as Error).name === 'AbortError') return;
+          // On other errors, keep any text streamed so far
+        } finally {
+          // Close AI streaming state (creates history boundary)
+          const currentState = aiPluginKey.getState(this.view.state);
+          if (currentState?.active) {
+            this.view.dispatch(
+              this.view.state.tr.setMeta(aiPluginKey, { active: false })
+            );
+          }
+
+          abortController = null;
+          isGenerating = false;
+          this.view.setProps({ editable: () => this.isEditable() });
+        }
+      },
+
+      cancel: () => {
+        if (!abortController) return;
+        abortController.abort();
+
+        const aiState = aiPluginKey.getState(this.view.state);
+        if (aiState?.active) {
+          const { startPos, currentPos } = aiState;
+          const tr = this.view.state.tr;
+          if (currentPos > startPos) {
+            tr.delete(startPos, currentPos);
+          }
+          tr.setMeta(aiPluginKey, { active: false });
+          this.view.dispatch(tr);
+        }
+
+        abortController = null;
+        isGenerating = false;
+        this.view.setProps({ editable: () => this.isEditable() });
+      }
+    };
+
+    return controller;
   }
 
   private emit(event: EditorEventName) {

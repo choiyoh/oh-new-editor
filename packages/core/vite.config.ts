@@ -11,7 +11,8 @@ export default defineConfig({
         markdown: resolve(__dirname, 'src/markdown.ts'),
         notion: resolve(__dirname, 'src/notion.ts'),
         table: resolve(__dirname, 'src/table.ts'),
-        toolbar: resolve(__dirname, 'src/toolbar.ts')
+        toolbar: resolve(__dirname, 'src/toolbar.ts'),
+        ai: resolve(__dirname, 'src/ai.ts')
       },
       name: 'OhNewEditorCore',
       formats: ['es', 'cjs'],

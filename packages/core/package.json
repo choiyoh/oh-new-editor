@@ -47,6 +47,11 @@
       "import": "./dist/toolbar.mjs",
       "require": "./dist/toolbar.cjs"
     },
+    "./ai": {
+      "types": "./dist/src/ai.d.ts",
+      "import": "./dist/ai.mjs",
+      "require": "./dist/ai.cjs"
+    },
     "./style.css": "./dist/style.css"
   },
   "scripts": {

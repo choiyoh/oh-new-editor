@@ -122,23 +122,36 @@ app.innerHTML = `
           </div>
         </aside>
 
-        <div class="demo-stage">
-          <div class="demo-stage__header">
-            <div class="demo-stage__header-main">
-              <span id="demo-badge" class="demo-badge">Document editor</span>
-              <strong id="demo-title">Product brief</strong>
-              <p id="demo-description">Classic editor chrome with a document-style canvas and integrated toolbar.</p>
+        <div class="demo-stage-wrapper">
+          <div class="demo-stage">
+            <div class="demo-stage__header">
+              <div class="demo-stage__header-main">
+                <span id="demo-badge" class="demo-badge">Document editor</span>
+                <strong id="demo-title">Product brief</strong>
+                <p id="demo-description">Classic editor chrome with a document-style canvas and integrated toolbar.</p>
+              </div>
+              <div class="demo-stage__header-controls">
+                <span id="demo-status" class="demo-status">Autosave on</span>
+                <label class="theme-toggle">
+                  <input id="theme-toggle" type="checkbox" />
+                  <span class="toggle-track" aria-hidden="true"></span>
+                  <span class="toggle-label">Dark theme</span>
+                </label>
+              </div>
             </div>
-            <div class="demo-stage__header-controls">
-              <span id="demo-status" class="demo-status">Autosave on</span>
-              <label class="theme-toggle">
-                <input id="theme-toggle" type="checkbox" />
-                <span class="toggle-track" aria-hidden="true"></span>
-                <span class="toggle-label">Dark theme</span>
-              </label>
+            <div id="editor-host" class="demo-editor" role="tabpanel" aria-label="Editor"></div>
+          </div>
+
+          <div class="demo-preview">
+            <div class="demo-preview__header">
+              <span class="demo-badge">Markdown Preview</span>
+              <strong>Live Output</strong>
+              <p>WYSIWYG edits are serialized to markdown in real-time.</p>
+            </div>
+            <div class="demo-preview__body">
+              <pre><code id="markdown-preview"></code></pre>
             </div>
           </div>
-          <div id="editor-host" class="demo-editor" role="tabpanel" aria-label="Editor"></div>
         </div>
       </div>
     </section>
@@ -153,8 +166,9 @@ const demoTitle = document.querySelector<HTMLElement>('#demo-title');
 const demoDescription = document.querySelector<HTMLElement>('#demo-description');
 const modeButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-mode]'));
 const themeToggle = document.querySelector<HTMLInputElement>('#theme-toggle');
+const markdownPreview = document.querySelector<HTMLElement>('#markdown-preview');
 
-if (!editorHost || !configCode || !demoBadge || !demoStatus || !demoTitle || !demoDescription || !themeToggle) {
+if (!editorHost || !configCode || !demoBadge || !demoStatus || !demoTitle || !demoDescription || !themeToggle || !markdownPreview) {
   throw new Error('Missing demo UI elements');
 }
 
@@ -165,9 +179,27 @@ const demoStatusElement = demoStatus;
 const demoTitleElement = demoTitle;
 const demoDescriptionElement = demoDescription;
 const themeToggleElement = themeToggle;
+const markdownPreviewElement = markdownPreview;
 
 let editor: Editor | null = null;
 let mode: DemoMode = 'toolbar';
+
+const editorConfig = {
+  table: createTableSupport({ maxRows: 12, maxCols: 8 }),
+  markdown: createMarkdownSupport(),
+  placeholder: 'Start typing…',
+  initialContent: '',
+  image: {
+    upload: async (file: File) => {
+      await new Promise((resolve) => window.setTimeout(resolve, 500));
+      return URL.createObjectURL(file);
+    }
+  },
+  styles: {
+    toolbar: createToolbarSupport(),
+    notion: createNotionSupport()
+  }
+};
 
 const initialContent = `
   <h2>Build only what you need</h2>
@@ -178,32 +210,7 @@ const initialContent = `
 }</code></pre>
 `;
 
-function getModeConfig(currentMode: DemoMode) {
-  const base = {
-    table: createTableSupport({ maxRows: 12, maxCols: 8 }),
-    markdown: createMarkdownSupport(),
-    placeholder: 'Start typing…',
-    initialContent,
-    image: {
-      upload: async (file: File) => {
-        await new Promise((resolve) => window.setTimeout(resolve, 500));
-        return URL.createObjectURL(file);
-      }
-    }
-  };
-
-  if (currentMode === 'notion') {
-    return {
-      ...base,
-      toolbar: createNotionSupport()
-    };
-  }
-
-  return {
-    ...base,
-    toolbar: createToolbarSupport()
-  };
-}
+editorConfig.initialContent = initialContent;
 
 function updateModeUi(currentMode: DemoMode) {
   for (const button of modeButtons) {
@@ -229,7 +236,11 @@ function updateModeUi(currentMode: DemoMode) {
 
   configCodeElement.textContent = JSON.stringify(
     {
-      toolbar: currentMode === 'notion' ? 'createNotionSupport()' : 'createToolbarSupport()',
+      styles: {
+        toolbar: 'createToolbarSupport()',
+        notion: 'createNotionSupport()'
+      },
+      currentMode,
       table: 'createTableSupport({ maxRows: 12, maxCols: 8 })',
       markdown: 'createMarkdownSupport()',
       image: 'upload(file) => Promise<string>'
@@ -239,11 +250,22 @@ function updateModeUi(currentMode: DemoMode) {
   );
 }
 
+function updateMarkdownPreview() {
+  if (!editor || !markdownPreviewElement) return;
+  markdownPreviewElement.textContent = editor.getContent('markdown');
+}
+
 function mountEditor(nextMode: DemoMode) {
-  editor?.destroy();
+  if (!editor) {
+    editor = createEditor(editorHostElement, editorConfig);
+    editor.on('change', () => {
+      updateMarkdownPreview();
+    });
+  }
+  editor.setStyle(nextMode);
   mode = nextMode;
   updateModeUi(nextMode);
-  editor = createEditor(editorHostElement, getModeConfig(nextMode));
+  updateMarkdownPreview();
 }
 
 for (const button of modeButtons) {

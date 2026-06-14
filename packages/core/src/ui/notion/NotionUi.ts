@@ -2,6 +2,13 @@ import { NodeSelection } from 'prosemirror-state';
 import type { EditorState } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 
+const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+const MOBILE_SHEET_MAX_WIDTH = 768;
+
+function shouldUseBottomSheet() {
+  return isTouchDevice || (typeof window !== 'undefined' && window.innerWidth < MOBILE_SHEET_MAX_WIDTH);
+}
+
 import {
   insertCodeBlock,
   insertHR,
@@ -108,6 +115,18 @@ function getActiveLinkHref(state: EditorState): string | null {
   return link?.attrs.href ?? null;
 }
 
+const CHOSEONG = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+
+function getChoseong(str: string): string {
+  return [...str].map((ch) => {
+    const code = ch.charCodeAt(0);
+    if (code >= 0xAC00 && code <= 0xD7A3) {
+      return CHOSEONG[Math.floor((code - 0xAC00) / 588)];
+    }
+    return ch;
+  }).join('');
+}
+
 export class NotionUi implements EditorToolbarController {
   readonly element = document.createElement('div');
 
@@ -122,6 +141,11 @@ export class NotionUi implements EditorToolbarController {
   private readonly tableLimits?: { maxRows?: number; maxCols?: number };
   private gridPicker: TableGridPicker | null = null;
   private linkEditor: LinkEditor = new LinkEditor();
+
+  private readonly slashBackdrop = document.createElement('div');
+  private readonly slashSheet = document.createElement('div');
+  private readonly slashHandle = document.createElement('div');
+  private slashSheetOpen = false;
 
   private getOverlayRect() {
     return (this.element.parentElement ?? this.view.dom.parentElement ?? document.body).getBoundingClientRect();
@@ -190,13 +214,18 @@ export class NotionUi implements EditorToolbarController {
 
     this.view.dom.addEventListener('keydown', this.handleKeyDown);
     this.view.dom.addEventListener('input', this.handleInput);
+
+    if (typeof window !== 'undefined' && window.visualViewport) {
+      window.visualViewport.addEventListener('resize', this.handleVisualViewportResize);
+    }
+
     this.sync();
   }
 
   setReadOnly(readOnly: boolean) {
     this.readOnly = readOnly;
     if (readOnly) {
-      this.slash.hidden = true;
+      this.hideSlashMenu();
       this.bubble.hidden = true;
       this.codeLanguage.hidden = true;
     }
@@ -212,9 +241,17 @@ export class NotionUi implements EditorToolbarController {
   destroy() {
     this.view.dom.removeEventListener('keydown', this.handleKeyDown);
     this.view.dom.removeEventListener('input', this.handleInput);
+
+    if (typeof window !== 'undefined' && window.visualViewport) {
+      window.visualViewport.removeEventListener('resize', this.handleVisualViewportResize);
+    }
+
     this.closeGridPicker();
     this.linkEditor.close();
+    this.hideSlashMenu();
     this.codeLanguage.remove();
+    this.slashBackdrop.remove();
+    this.slashSheet.remove();
     this.element.remove();
   }
 
@@ -292,7 +329,8 @@ export class NotionUi implements EditorToolbarController {
 
     if (event.key === 'Escape') {
       event.preventDefault();
-      this.slash.hidden = true;
+      this.hideSlashMenu();
+      this.view.focus();
       return;
     }
 
@@ -451,19 +489,19 @@ export class NotionUi implements EditorToolbarController {
 
   private createSlashItems(options: NotionUiOptions): SlashItem[] {
     const items: SlashItem[] = [
-      { icon: toolbarIcons.paragraph, label: 'Text', description: 'Start writing with a plain paragraph', category: 'Basic', keywords: ['paragraph', 'text'], run: () => run(this.view, insertParagraph()) },
-      { icon: toolbarIcons.heading1, label: 'Heading 1', description: 'Large section heading', category: 'Basic', keywords: ['h1', 'heading', 'title'], run: () => run(this.view, setHeading(1)) },
-      { icon: toolbarIcons.heading2, label: 'Heading 2', description: 'Medium section heading', category: 'Basic', keywords: ['h2', 'heading', 'subtitle'], run: () => run(this.view, setHeading(2)) },
-      { icon: toolbarIcons.heading3, label: 'Heading 3', description: 'Small section heading', category: 'Basic', keywords: ['h3', 'heading'], run: () => run(this.view, setHeading(3)) },
-      { icon: toolbarIcons.bulletList, label: 'Bullet List', description: 'Create an unordered list', category: 'Basic', keywords: ['list', 'bullet'], run: () => run(this.view, toggleBulletList()) },
-      { icon: toolbarIcons.orderedList, label: 'Ordered List', description: 'Create a numbered list', category: 'Basic', keywords: ['list', 'ordered', 'number'], run: () => run(this.view, toggleOrderedList()) },
-      { icon: toolbarIcons.quote, label: 'Blockquote', description: 'Highlight a quoted passage', category: 'Basic', keywords: ['quote'], run: () => run(this.view, toggleBlockquote()) },
-      { icon: toolbarIcons.codeBlock, label: 'Code Block', description: 'Insert a fenced code block', category: 'Advanced', keywords: ['code', 'snippet'], run: () => run(this.view, insertCodeBlock()) },
-      { icon: toolbarIcons.divider, label: 'Divider', description: 'Insert a horizontal divider', category: 'Advanced', keywords: ['hr', 'divider', 'separator'], run: () => run(this.view, insertHR()) }
+      { icon: toolbarIcons.paragraph, label: 'Text', description: 'Start writing with a plain paragraph', category: 'Basic', keywords: ['paragraph', 'text', '텍스트', '본문', '문단'], run: () => run(this.view, insertParagraph()) },
+      { icon: toolbarIcons.heading1, label: 'Heading 1', description: 'Large section heading', category: 'Basic', keywords: ['h1', 'heading', 'title', '제목1', '큰제목', '표제'], run: () => run(this.view, setHeading(1)) },
+      { icon: toolbarIcons.heading2, label: 'Heading 2', description: 'Medium section heading', category: 'Basic', keywords: ['h2', 'heading', 'subtitle', '제목2', '중제목', '부제목'], run: () => run(this.view, setHeading(2)) },
+      { icon: toolbarIcons.heading3, label: 'Heading 3', description: 'Small section heading', category: 'Basic', keywords: ['h3', 'heading', '제목3', '소제목'], run: () => run(this.view, setHeading(3)) },
+      { icon: toolbarIcons.bulletList, label: 'Bullet List', description: 'Create an unordered list', category: 'Basic', keywords: ['list', 'bullet', '리스트', '목록', '글머리'], run: () => run(this.view, toggleBulletList()) },
+      { icon: toolbarIcons.orderedList, label: 'Ordered List', description: 'Create a numbered list', category: 'Basic', keywords: ['list', 'ordered', 'number', '번호', '숫자목록', '순서'], run: () => run(this.view, toggleOrderedList()) },
+      { icon: toolbarIcons.quote, label: 'Blockquote', description: 'Highlight a quoted passage', category: 'Basic', keywords: ['quote', '인용', '인용구', '블록인용'], run: () => run(this.view, toggleBlockquote()) },
+      { icon: toolbarIcons.codeBlock, label: 'Code Block', description: 'Insert a fenced code block', category: 'Advanced', keywords: ['code', 'snippet', '코드', '코드블록', '소스'], run: () => run(this.view, insertCodeBlock()) },
+      { icon: toolbarIcons.divider, label: 'Divider', description: 'Insert a horizontal divider', category: 'Advanced', keywords: ['hr', 'divider', 'separator', '구분선', '가로줄', '분할'], run: () => run(this.view, insertHR()) }
     ];
 
     if (options.onPickImage) {
-      items.push({ icon: toolbarIcons.image, label: 'Image', description: 'Upload an image from your device', category: 'Media', keywords: ['image', 'upload', 'media'], run: () => options.onPickImage?.() });
+      items.push({ icon: toolbarIcons.image, label: 'Image', description: 'Upload an image from your device', category: 'Media', keywords: ['image', 'upload', 'media', '이미지', '사진', '그림', '업로드'], run: () => options.onPickImage?.() });
     }
 
     // If insertActions include a table insert action, show a Table slash item
@@ -475,7 +513,7 @@ export class NotionUi implements EditorToolbarController {
         label: 'Table',
         description: 'Insert a table with custom rows and columns',
         category: 'Advanced',
-        keywords: ['table', 'grid', 'rows', 'columns'],
+        keywords: ['table', 'grid', 'rows', 'columns', '표', '테이블', '그리드', '행', '열'],
         run: () => this.openGridPicker()
       });
     }
@@ -499,9 +537,12 @@ export class NotionUi implements EditorToolbarController {
     if (!match || this.readOnly) return [];
 
     const query = match.query.trim().toLowerCase();
+    const queryChoseong = getChoseong(query);
     return this.slashItems.filter((item) => {
       if (!query) return true;
-      return item.label.toLowerCase().includes(query) || item.keywords.some((word) => word.includes(query));
+      return item.label.toLowerCase().includes(query)
+        || item.keywords.some((word) => word.includes(query))
+        || item.keywords.some((word) => getChoseong(word).includes(queryChoseong));
     });
   }
 
@@ -510,15 +551,22 @@ export class NotionUi implements EditorToolbarController {
     const visibleItems = this.getVisibleSlashItems();
 
     if (!match || !visibleItems.length || this.readOnly) {
-      this.slash.hidden = true;
+      this.hideSlashMenu();
       return;
     }
 
-    const coords = this.view.coordsAtPos(this.view.state.selection.from);
-    this.slash.hidden = false;
-    this.placeOverlay(this.slash, coords, {
-      offsetY: 8
-    });
+    if (shouldUseBottomSheet()) {
+      this.openSlashSheet();
+    } else {
+      this.closeSlashSheet();
+      this.attachSlashToPopup();
+      this.slash.hidden = false;
+      const coords = this.view.coordsAtPos(this.view.state.selection.from);
+      this.placeOverlay(this.slash, coords, {
+        offsetY: 8
+      });
+    }
+
     this.selectedSlashIndex = Math.min(this.selectedSlashIndex, visibleItems.length - 1);
     this.renderSlashItems();
   }
@@ -589,7 +637,86 @@ export class NotionUi implements EditorToolbarController {
 
     await item.run();
     this.view.focus();
-    this.slash.hidden = true;
+    this.hideSlashMenu();
     this.sync();
+  }
+
+  private hideSlashMenu() {
+    this.slash.hidden = true;
+    this.closeSlashSheet();
+    this.attachSlashToPopup();
+  }
+
+  private attachSlashToPopup() {
+    if (this.slash.parentElement !== this.element) {
+      this.slash.classList.remove('oh-editor__slash-menu--mobile');
+      this.element.append(this.slash);
+    }
+  }
+
+  private ensureSlashSheetElements() {
+    if (this.slashSheet.isConnected) return;
+
+    this.slashBackdrop.className = 'oh-editor__slash-backdrop';
+    this.slashBackdrop.setAttribute('aria-hidden', 'true');
+    this.slashBackdrop.addEventListener('mousedown', (event) => {
+      event.preventDefault();
+      this.hideSlashMenu();
+      this.view.focus();
+    });
+
+    this.slashSheet.className = 'oh-editor__slash-bottom-sheet';
+    this.slashSheet.setAttribute('role', 'dialog');
+    this.slashSheet.setAttribute('aria-label', 'Slash commands');
+    this.slashSheet.setAttribute('aria-hidden', 'true');
+
+    this.slashHandle.className = 'oh-editor__slash-bottom-sheet-handle';
+    this.slashHandle.setAttribute('aria-hidden', 'true');
+
+    this.slashSheet.append(this.slashHandle);
+    document.body.append(this.slashBackdrop, this.slashSheet);
+  }
+
+  private openSlashSheet() {
+    this.ensureSlashSheetElements();
+
+    if (this.slash.parentElement !== this.slashSheet) {
+      this.slash.classList.add('oh-editor__slash-menu--mobile');
+      this.slashSheet.append(this.slash);
+    }
+
+    this.slash.hidden = false;
+    this.slashBackdrop.classList.add('is-open');
+    this.slashSheet.classList.add('is-open');
+    this.slashBackdrop.setAttribute('aria-hidden', 'false');
+    this.slashSheet.setAttribute('aria-hidden', 'false');
+    this.slashSheetOpen = true;
+    this.updateSlashSheetPosition();
+  }
+
+  private closeSlashSheet() {
+    if (!this.slashSheetOpen && !this.slashSheet.isConnected) return;
+
+    this.slashBackdrop.classList.remove('is-open');
+    this.slashSheet.classList.remove('is-open');
+    this.slashBackdrop.setAttribute('aria-hidden', 'true');
+    this.slashSheet.setAttribute('aria-hidden', 'true');
+    this.slashSheetOpen = false;
+  }
+
+  private readonly handleVisualViewportResize = () => {
+    if (this.slashSheetOpen) {
+      this.updateSlashSheetPosition();
+    }
+  };
+
+  private updateSlashSheetPosition() {
+    if (!window.visualViewport) return;
+
+    const keyboardHeight = Math.max(
+      0,
+      window.innerHeight - window.visualViewport.height - window.visualViewport.offsetTop
+    );
+    this.slashSheet.style.bottom = `${keyboardHeight}px`;
   }
 }
