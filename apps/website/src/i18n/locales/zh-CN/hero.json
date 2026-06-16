@@ -1,0 +1,13 @@
+{
+  "badge": "开源编辑器工具包",
+  "title": "以你的方式构建",
+  "titleHighlight": "富文本编辑器",
+  "subtitle": "无头、框架无关的富文本编辑器工具包。使用 React、Vue、Svelte 或原生 JS 构建自定义编辑体验。",
+  "primaryCta": "开始使用",
+  "secondaryCta": "在 GitHub 上查看",
+  "stats": {
+    "stars": "GitHub 星标",
+    "downloads": "npm 下载量",
+    "frameworks": "支持框架"
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "nav": {
+    "features": "Features",
+    "packages": "Packages",
+    "demo": "Demo",
+    "docs": "Docs",
+    "github": "GitHub",
+    "getStarted": "Get Started",
+    "language": "Language"
+  },
+  "footer": {
+    "product": "Product",
+    "features": "Features",
+    "packages": "Packages",
+    "docs": "Documentation",
+    "playground": "Playground",
+    "resources": "Resources",
+    "github": "GitHub",
+    "npm": "npm",
+    "changelog": "Changelog",
+    "community": "Community",
+    "discord": "Discord",
+    "twitter": "Twitter",
+    "blog": "Blog",
+    "legal": "Legal",
+    "privacy": "Privacy Policy",
+    "terms": "Terms of Service",
+    "license": "License",
+    "copyright": "© 2026 Oh New Editor. All rights reserved."
+  },
+  "cta": {
+    "getStarted": "Get Started",
+    "viewOnGithub": "View on GitHub",
+    "tryPlayground": "Try Playground",
+    "readDocs": "Read the Docs"
+  },
+  "banner": {
+    "title": "Ready to Get Started?",
+    "subtitle": "Build feature-rich editing experiences your way. Open source, modular, and framework-agnostic."
+  },
+  "languageSwitcher": {
+    "en": "English",
+    "ko": "한국어",
+    "zh-CN": "简体中文"
+  }
+}

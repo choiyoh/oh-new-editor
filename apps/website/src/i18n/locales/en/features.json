@@ -1,0 +1,37 @@
+{
+  "title": "Everything You Need",
+  "subtitle": "Build feature-rich editors without the bloat. Pick what you need, leave the rest.",
+  "items": {
+    "frameworkAgnostic": {
+      "title": "Framework Agnostic",
+      "description": "First-class support for React, Vue, and Svelte. Use the same editor engine everywhere.",
+      "badge": "Core"
+    },
+    "richTextEditing": {
+      "title": "Rich Text Editing",
+      "description": "Bold, italic, headings, lists, code blocks, and more. Powered by ProseMirror for rock-solid reliability.",
+      "badge": "Core"
+    },
+    "markdownSupport": {
+      "title": "Markdown Support",
+      "description": "Write in Markdown, render as rich text. Bidirectional conversion with full syntax support.",
+      "badge": "Plugin"
+    },
+    "tableEditing": {
+      "title": "Table Editing",
+      "description": "Create and edit tables with column resizing, row/column operations, and header support.",
+      "badge": "Plugin"
+    },
+    "notionStyle": {
+      "title": "Notion-Style UI",
+      "description": "Slash commands, block menus, drag handles — a Notion-inspired editing experience out of the box.",
+      "badge": "Plugin"
+    },
+    "aiReady": {
+      "title": "AI Ready",
+      "description": "Extensible architecture for AI-powered features: autocomplete, translation, summarization, and more.",
+      "badge": "Plugin"
+    }
+  },
+  "showAll": "Explore All Features →"
+}

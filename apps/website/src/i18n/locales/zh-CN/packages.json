@@ -1,0 +1,36 @@
+{
+  "title": "模块化包",
+  "subtitle": "只安装你需要的。每个功能都是可选的包，未使用时零开销。",
+  "items": {
+    "core": {
+      "title": "@oh-new-editor/core",
+      "description": "引擎。基于 ProseMirror 的编辑器，包含模式、命令、插件和 HTML/JSON I/O。",
+      "badge": "基础"
+    },
+    "toolbar": {
+      "title": "工具栏 UI",
+      "description": "经典格式工具栏，包含加粗、斜体、标题、列表、链接等功能。",
+      "badge": "UI"
+    },
+    "notion": {
+      "title": "Notion UI",
+      "description": "受 Notion 启发的基于块的界面，包含斜杠命令和拖拽手柄。",
+      "badge": "UI"
+    },
+    "table": {
+      "title": "表格支持",
+      "description": "完整的表格编辑，包含列宽调整、行/列添加删除和标题切换。",
+      "badge": "插件"
+    },
+    "markdown": {
+      "title": "Markdown",
+      "description": "双向 Markdown 转换。将 Markdown 解析为编辑器内容并序列化回去。",
+      "badge": "插件"
+    },
+    "adapters": {
+      "title": "框架适配器",
+      "description": "React、Vue 和 Svelte 绑定。在你选择的框架中像使用原生组件一样使用编辑器。",
+      "badge": "适配器"
+    }
+  }
+}

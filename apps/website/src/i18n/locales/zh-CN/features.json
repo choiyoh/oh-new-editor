@@ -1,0 +1,37 @@
+{
+  "title": "你所需的一切",
+  "subtitle": "构建功能丰富的编辑器，无需多余负担。按需选择，其余皆可省略。",
+  "items": {
+    "frameworkAgnostic": {
+      "title": "框架无关",
+      "description": "对 React、Vue 和 Svelte 提供一流支持。在任何地方使用相同的编辑器引擎。",
+      "badge": "核心"
+    },
+    "richTextEditing": {
+      "title": "富文本编辑",
+      "description": "加粗、斜体、标题、列表、代码块等。基于 ProseMirror，提供可靠的稳定性。",
+      "badge": "核心"
+    },
+    "markdownSupport": {
+      "title": "Markdown 支持",
+      "description": "用 Markdown 编写，以富文本呈现。支持完整语法的双向转换。",
+      "badge": "插件"
+    },
+    "tableEditing": {
+      "title": "表格编辑",
+      "description": "创建和编辑表格，支持列宽调整、行/列操作和标题切换。",
+      "badge": "插件"
+    },
+    "notionStyle": {
+      "title": "Notion 风格 UI",
+      "description": "斜杠命令、块菜单、拖拽手柄 — 受 Notion 启发的编辑体验，开箱即用。",
+      "badge": "插件"
+    },
+    "aiReady": {
+      "title": "AI 就绪",
+      "description": "为 AI 功能设计的可扩展架构：自动补全、翻译、摘要等。",
+      "badge": "插件"
+    }
+  },
+  "showAll": "探索所有功能 →"
+}

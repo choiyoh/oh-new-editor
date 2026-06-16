@@ -1,0 +1,37 @@
+{
+  "title": "필요한 모든 것",
+  "subtitle": "불필요한 기능 없이 풍부한 편집기를 만드세요. 필요한 것만 골라 사용하세요.",
+  "items": {
+    "frameworkAgnostic": {
+      "title": "프레임워크 독립적",
+      "description": "React, Vue, Svelte를 일급 지원합니다. 동일한 에디터 엔진을 어디서나 사용하세요.",
+      "badge": "코어"
+    },
+    "richTextEditing": {
+      "title": "리치 텍스트 편집",
+      "description": "굵게, 기울임, 제목, 목록, 코드 블록 등. ProseMirror 기반의 견고한 안정성.",
+      "badge": "코어"
+    },
+    "markdownSupport": {
+      "title": "마크다운 지원",
+      "description": "마크다운으로 작성하고 리치 텍스트로 렌더링. 완전한 양방향 변환 지원.",
+      "badge": "플러그인"
+    },
+    "tableEditing": {
+      "title": "테이블 편집",
+      "description": "열 크기 조절, 행/열 추가·삭제, 헤더 토글 기능이 포함된 테이블 편집.",
+      "badge": "플러그인"
+    },
+    "notionStyle": {
+      "title": "Notion 스타일 UI",
+      "description": "슬래시 커맨드, 블록 메뉴, 드래그 핸들 — Notion에서 영감을 받은 편집 경험.",
+      "badge": "플러그인"
+    },
+    "aiReady": {
+      "title": "AI 지원",
+      "description": "자동완성, 번역, 요약 등 AI 기능을 위한 확장 가능한 아키텍처.",
+      "badge": "플러그인"
+    }
+  },
+  "showAll": "모든 기능 살펴보기 →"
+}

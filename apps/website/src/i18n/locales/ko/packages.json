@@ -1,0 +1,36 @@
+{
+  "title": "모듈형 패키지",
+  "subtitle": "필요한 것만 설치하세요. 모든 기능은 선택적 패키지로, 사용하지 않으면 오버헤드가 없습니다.",
+  "items": {
+    "core": {
+      "title": "@oh-new-editor/core",
+      "description": "엔진. ProseMirror 기반 에디터. 스키마, 커맨드, 플러그인, HTML/JSON 입출력.",
+      "badge": "기본"
+    },
+    "toolbar": {
+      "title": "툴바 UI",
+      "description": "굵게, 기울임, 제목, 목록, 링크 등을 포함한 클래식 서식 툴바.",
+      "badge": "UI"
+    },
+    "notion": {
+      "title": "Notion UI",
+      "description": "슬래시 커맨드와 드래그 핸들을 갖춘 Notion 스타일의 블록 기반 인터페이스.",
+      "badge": "UI"
+    },
+    "table": {
+      "title": "테이블 지원",
+      "description": "열 크기 조절, 행/열 추가·삭제, 헤더 토글을 포함한 완전한 테이블 편집.",
+      "badge": "플러그인"
+    },
+    "markdown": {
+      "title": "마크다운",
+      "description": "양방향 마크다운 변환. 마크다운을 에디터 콘텐츠로 파싱하고 다시 직렬화.",
+      "badge": "플러그인"
+    },
+    "adapters": {
+      "title": "프레임워크 어댑터",
+      "description": "React, Vue, Svelte 바인딩. 원하는 프레임워크에서 네이티브 컴포넌트로 에디터를 사용하세요.",
+      "badge": "어댑터"
+    }
+  }
+}

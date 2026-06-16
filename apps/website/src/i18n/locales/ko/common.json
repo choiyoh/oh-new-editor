@@ -1,0 +1,46 @@
+{
+  "nav": {
+    "features": "기능",
+    "packages": "패키지",
+    "demo": "데모",
+    "docs": "문서",
+    "github": "GitHub",
+    "getStarted": "시작하기",
+    "language": "언어"
+  },
+  "footer": {
+    "product": "제품",
+    "features": "기능",
+    "packages": "패키지",
+    "docs": "문서",
+    "playground": "플레이그라운드",
+    "resources": "리소스",
+    "github": "GitHub",
+    "npm": "npm",
+    "changelog": "변경 로그",
+    "community": "커뮤니티",
+    "discord": "Discord",
+    "twitter": "Twitter",
+    "blog": "블로그",
+    "legal": "법적 고지",
+    "privacy": "개인정보 처리방침",
+    "terms": "이용약관",
+    "license": "라이선스",
+    "copyright": "© 2026 Oh New Editor. All rights reserved."
+  },
+  "cta": {
+    "getStarted": "시작하기",
+    "viewOnGithub": "GitHub에서 보기",
+    "tryPlayground": "플레이그라운드 열기",
+    "readDocs": "문서 보기"
+  },
+  "banner": {
+    "title": "시작할 준비가 되셨나요?",
+    "subtitle": "당신만의 방식으로 풍부한 편집 경험을 만드세요. 오픈소스, 모듈형, 프레임워크 독립적."
+  },
+  "languageSwitcher": {
+    "en": "English",
+    "ko": "한국어",
+    "zh-CN": "简体中文"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "title": "亲自体验",
+  "subtitle": "在这里试用编辑器。在工具栏和 Notion 风格模式之间切换，切换主题，查看实时 Markdown 输出。",
+  "tryPlayground": "打开完整演练场 →",
+  "modeLabel": "模式",
+  "themeLabel": "主题",
+  "modes": {
+    "toolbar": "工具栏",
+    "notion": "Notion"
+  },
+  "themes": {
+    "light": "浅色",
+    "dark": "深色"
+  },
+  "previewLabel": "Markdown 预览",
+  "placeholder": "在此输入... 使用 / 唤出斜杠命令，选择文本进行格式化。"
+}

@@ -1,0 +1,13 @@
+{
+  "badge": "오픈소스 에디터 툴킷",
+  "title": "당신만의 방식으로",
+  "titleHighlight": "리치 텍스트 에디터를",
+  "subtitle": "헤드리스, 프레임워크에 구애받지 않는 리치 텍스트 에디터 툴킷. React, Vue, Svelte 또는 Vanilla JS로 커스텀 편집 환경을 구축하세요.",
+  "primaryCta": "시작하기",
+  "secondaryCta": "GitHub에서 보기",
+  "stats": {
+    "stars": "GitHub 스타",
+    "downloads": "npm 다운로드",
+    "frameworks": "지원 프레임워크"
+  }
+}
