@@ -20,13 +20,13 @@ export function Button({
   ...props
 }: ButtonProps) {
   const baseClasses =
-    'inline-flex items-center justify-center rounded-full font-semibold transition-all duration-300 hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 dark:focus:ring-offset-zinc-900';
+    'inline-flex items-center justify-center rounded-full font-semibold transition-all duration-300 ease-out hover:scale-[1.02] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 dark:focus:ring-offset-zinc-900';
 
   const variantClasses = {
     primary:
-      'bg-brand-600 text-white hover:bg-brand-700 shadow-md hover:shadow-lg',
+      'bg-gradient-to-r from-brand-600 to-indigo-600 text-white shadow-md shadow-brand-500/10 hover:shadow-lg hover:shadow-brand-500/25 dark:shadow-brand-950/30',
     secondary:
-      'border border-zinc-300 dark:border-zinc-700 bg-white/50 dark:bg-zinc-900/50 text-zinc-900 dark:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800',
+      'border border-zinc-200/60 dark:border-zinc-800/60 bg-white/40 dark:bg-zinc-900/30 text-zinc-900 dark:text-zinc-100 hover:bg-zinc-100/60 dark:hover:bg-zinc-800/40 backdrop-blur-sm shadow-sm hover:shadow-md',
     ghost:
       'bg-transparent text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800',
   };

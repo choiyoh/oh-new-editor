@@ -25,13 +25,13 @@ export function Card({
     <Wrapper
       href={href}
       className={cn(
-        'group relative flex flex-col rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 md:p-8 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl dark:hover:shadow-2xl dark:hover:shadow-brand-900/20',
+        'group relative flex flex-col rounded-2xl border border-zinc-200/50 dark:border-zinc-800/50 bg-white/60 dark:bg-zinc-900/30 p-6 md:p-8 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-brand-500/5 dark:hover:shadow-brand-500/10 backdrop-blur-md',
         href && 'cursor-pointer',
         className,
       )}
     >
       {icon && (
-        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-brand-50 text-brand-600 dark:bg-brand-900/20 dark:text-brand-400">
+        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-tr from-brand-50 to-indigo-50/50 text-brand-600 dark:from-brand-950/40 dark:to-indigo-950/20 dark:text-brand-400 border border-brand-100/30 dark:border-brand-900/20">
           {icon}
         </div>
       )}
