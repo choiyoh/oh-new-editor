@@ -9,6 +9,7 @@
   let editor: Editor | null = null;
   let currentValue = value;
   let isFocused = false;
+  let pendingValue: string | undefined;
 
   const dispatch = createEventDispatcher<{ change: string }>();
 
@@ -31,6 +32,13 @@
 
     editor.on('blur', () => {
       isFocused = false;
+      // Apply a value that arrived while the user was typing.
+      const pending = pendingValue;
+      pendingValue = undefined;
+      if (editor && pending !== undefined && pending !== currentValue) {
+        editor.setContent(pending, options?.outputFormat ?? 'html');
+        currentValue = pending;
+      }
     });
   });
 
@@ -39,9 +47,14 @@
     editor = null;
   });
 
-  $: if (editor && value !== undefined && value !== currentValue && !isFocused) {
-    editor.setContent(value, options?.outputFormat ?? 'html');
-    currentValue = value;
+  $: if (editor && value !== undefined && value !== currentValue) {
+    if (isFocused) {
+      // Replacing content under the caret would jump the cursor; defer to blur.
+      pendingValue = value;
+    } else {
+      editor.setContent(value, options?.outputFormat ?? 'html');
+      currentValue = value;
+    }
   }
 
   $: if (editor && options?.readOnly !== undefined) {

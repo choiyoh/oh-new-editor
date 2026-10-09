@@ -21,6 +21,10 @@ export const OhNewEditor = defineComponent({
       type: String,
       required: false
     },
+    /**
+     * Structural options are read on mount only (change `key` to rebuild);
+     * `readOnly` and `outputFormat` are applied live.
+     */
     options: {
       type: Object as () => EditorOptions | undefined,
       required: false
@@ -32,6 +36,7 @@ export const OhNewEditor = defineComponent({
     const editor = shallowRef<Editor | null>(null);
     const currentValue = ref<string | undefined>(props.modelValue ?? props.value);
     const isFocused = ref(false);
+    let pendingValue: string | undefined;
 
     const resolvedValue = () => props.modelValue ?? props.value;
 
@@ -56,6 +61,13 @@ export const OhNewEditor = defineComponent({
 
       instance.on('blur', () => {
         isFocused.value = false;
+        // Apply a value that arrived while the user was typing.
+        const pending = pendingValue;
+        pendingValue = undefined;
+        if (pending !== undefined && pending !== currentValue.value) {
+          instance.setContent(pending, props.options?.outputFormat ?? 'html');
+          currentValue.value = pending;
+        }
       });
 
       editor.value = instance;
@@ -70,7 +82,11 @@ export const OhNewEditor = defineComponent({
       () => resolvedValue(),
       (value) => {
         if (!editor.value || value === undefined || value === currentValue.value) return;
-        if (isFocused.value) return;
+        if (isFocused.value) {
+          // Replacing content under the caret would jump the cursor; defer to blur.
+          pendingValue = value;
+          return;
+        }
         editor.value.setContent(value, props.options?.outputFormat ?? 'html');
         currentValue.value = value;
       }
