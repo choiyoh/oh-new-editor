@@ -13,6 +13,7 @@ import {
 } from 'prosemirror-tables';
 import type { EditorState } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
+import { onPress } from '../dom';
 import { toolbarIcons } from '../icons';
 
 type TableMenuAction = {
@@ -55,8 +56,10 @@ export class TableMenu {
     ];
     this.element.className = 'oh-editor__table-menu';
     this.element.hidden = true;
+    this.element.setAttribute('role', 'menu');
+    this.element.setAttribute('aria-label', 'Table');
     this.render();
-    this.element.addEventListener('keydown', this.handleKeyDown);
+    document.addEventListener('keydown', this.handleKeyDown, true);
     document.addEventListener('mousedown', this.handleClickOutside, true);
   }
 
@@ -92,7 +95,7 @@ export class TableMenu {
 
   destroy() {
     document.removeEventListener('mousedown', this.handleClickOutside, true);
-    this.element.removeEventListener('keydown', this.handleKeyDown);
+    document.removeEventListener('keydown', this.handleKeyDown, true);
     this.element.remove();
   }
 
@@ -100,8 +103,26 @@ export class TableMenu {
     if (!this.isOpen) return;
     if (event.key === 'Escape') {
       event.preventDefault();
+      event.stopPropagation();
       this.close();
+      this.view.focus();
+      return;
     }
+
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp' && event.key !== 'Home' && event.key !== 'End') return;
+
+    // Arrow keys move into / through the menu, also when focus is still in the editor.
+    const buttons = Array.from(this.element.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
+    if (!buttons.length) return;
+    event.preventDefault();
+    event.stopPropagation();
+
+    const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
+    let next = 0;
+    if (event.key === 'End') next = buttons.length - 1;
+    else if (event.key === 'ArrowDown') next = index === -1 ? 0 : (index + 1) % buttons.length;
+    else if (event.key === 'ArrowUp') next = index === -1 ? buttons.length - 1 : (index - 1 + buttons.length) % buttons.length;
+    buttons[next].focus();
   };
 
   private readonly handleClickOutside = (event: MouseEvent) => {
@@ -116,11 +137,14 @@ export class TableMenu {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'oh-editor__table-menu-button';
+      button.setAttribute('role', 'menuitem');
+      button.tabIndex = -1;
       button.dataset.index = String(index);
 
       if (action.icon) {
         const iconSpan = document.createElement('span');
         iconSpan.className = 'oh-editor__table-menu-icon';
+        iconSpan.setAttribute('aria-hidden', 'true');
         iconSpan.innerHTML = action.icon;
         button.append(iconSpan);
       }
@@ -129,11 +153,10 @@ export class TableMenu {
       label.textContent = action.label;
       button.append(label);
 
-      button.addEventListener('mousedown', (event) => {
-        event.preventDefault();
+      onPress(button, () => {
         action.command(this.view.state, this.view.dispatch);
-        this.view.focus();
         this.close();
+        this.view.focus();
       });
       this.element.append(button);
     }

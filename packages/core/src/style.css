@@ -1031,6 +1031,22 @@
   transition: border-color var(--oh-editor-transition);
 }
 
+.oh-editor__link-editor {
+  flex-wrap: wrap;
+  max-width: calc(100% - 8px);
+}
+
+.oh-editor__link-editor-input[aria-invalid='true'] {
+  border-color: var(--oh-editor-danger-border);
+}
+
+.oh-editor__link-editor-error {
+  flex-basis: 100%;
+  padding: 0 4px 2px;
+  color: var(--oh-editor-danger);
+  font: 500 12px/1.4 var(--oh-editor-font-family);
+}
+
 .oh-editor__link-editor-input:focus {
   border-color: var(--oh-editor-primary);
   box-shadow: 0 0 0 2px var(--oh-editor-primary-soft);

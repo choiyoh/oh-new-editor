@@ -4,23 +4,27 @@ import type { EditorView } from 'prosemirror-view';
 
 import {
   clearFontSize,
+  getActiveLink,
   insertCodeBlock,
   insertHR,
   insertParagraph,
+  removeLink,
   setCodeBlockLanguage,
   setFontSize,
   setHeading,
+  setLink,
   toggleBlockquote,
   toggleBold,
   toggleBulletList,
   toggleCode,
   toggleItalic,
-  toggleLink,
   toggleOrderedList,
   toggleStrike,
   toggleUnderline
 } from '../../commands';
 import type { EditorToolbarAction } from '../../types';
+import { normalizeHref } from '../../utils/url';
+import { onPress } from '../dom';
 import { toolbarIcons } from '../icons';
 import { TableGridPicker } from '../menus/TableGridPicker';
 import { LinkEditor } from '../LinkEditor';
@@ -31,6 +35,7 @@ const DEFAULT_CODE_LANGUAGES = ['', 'plaintext', 'javascript', 'typescript', 'ts
 type ToolbarActionConfig = {
   label: string;
   title: string;
+  role?: string;
   command: (view: EditorView) => boolean | Promise<boolean>;
   isEnabled?: (state: EditorState) => boolean;
   isActive?: (state: EditorState) => boolean;
@@ -109,16 +114,6 @@ function isInCodeBlock(state: EditorState) {
   return getBlockValue(state) === 'code_block';
 }
 
-function getActiveLinkHref(state: EditorState): string | null {
-  const { $from, empty } = state.selection;
-  if (!empty) return null;
-  const linkMark = state.schema.marks.link;
-  if (!linkMark) return null;
-  const marks = state.storedMarks ?? $from.marks();
-  const link = linkMark.isInSet(marks);
-  return link?.attrs.href ?? null;
-}
-
 export class Toolbar {
   readonly element = document.createElement('div');
 
@@ -151,6 +146,9 @@ export class Toolbar {
   private readonly boundUpdateOverflow = () => this.updateOverflow();
   private readonly boundHandleDocumentMouseDown = (event: MouseEvent) => this.handleDocumentMouseDown(event);
   private readonly boundHandleKeydown = (event: KeyboardEvent) => this.handleToolbarKeydown(event);
+  private readonly boundHandleFocusIn = (event: FocusEvent) => {
+    if (event.target instanceof HTMLElement) this.refreshRovingTabIndex(event.target);
+  };
 
   constructor(
     private readonly view: EditorView,
@@ -195,7 +193,7 @@ export class Toolbar {
       const isAltButton = button.dataset.role === 'image-alt';
       button.disabled = this.readOnly || (isImageButton && !this.canUploadImages) || (isAltButton && !isImageSelected(state)) || (config.isEnabled ? !config.isEnabled(state) : false) || button.dataset.busy === 'true';
       button.dataset.active = config.isActive?.(state) ? 'true' : 'false';
-      button.setAttribute('aria-pressed', button.dataset.active);
+      if (config.isActive) button.setAttribute('aria-pressed', button.dataset.active);
 
       if (isAltButton) {
         button.hidden = !isImageSelected(state);
@@ -217,6 +215,8 @@ export class Toolbar {
     if (wasCodeLanguageHidden !== this.codeLanguageGroup.hidden) {
       requestAnimationFrame(() => this.updateOverflow());
     }
+
+    this.refreshRovingTabIndex();
   }
 
   destroy() {
@@ -231,6 +231,7 @@ export class Toolbar {
     window.removeEventListener('resize', this.boundUpdateOverflow);
     document.removeEventListener('mousedown', this.boundHandleDocumentMouseDown);
     this.element.removeEventListener('keydown', this.boundHandleKeydown);
+    this.element.removeEventListener('focusin', this.boundHandleFocusIn);
 
     this.element.remove();
     this.actions.clear();
@@ -266,35 +267,8 @@ export class Toolbar {
         {
           label: toolbarIcons.link,
           title: 'Insert link',
-          command: () => {
-            const linkButton = this.element.querySelector<HTMLElement>('[aria-label="Insert link"]');
-            if (!linkButton) return false;
-            const btnRect = linkButton.getBoundingClientRect();
-            const container = this.element.parentElement;
-            if (!container) return false;
-            const existingHref = getActiveLinkHref(this.view.state);
-
-            this.linkEditor.open({
-              container,
-              coords: { left: btnRect.left, top: btnRect.bottom + 4 },
-              anchorHref: existingHref ?? undefined,
-              onConfirm: (href) => {
-                run(this.view, toggleLink(href));
-                this.view.focus();
-                this.sync();
-              },
-              onRemove: existingHref ? () => {
-                run(this.view, toggleLink(existingHref));
-                this.view.focus();
-                this.sync();
-              } : undefined,
-              onClose: () => {
-                this.view.focus();
-                this.sync();
-              }
-            });
-            return true;
-          },
+          role: 'link',
+          command: () => this.openLinkEditor(),
           isActive: (state) => hasMark(state, 'link')
         }
       ],
@@ -348,11 +322,9 @@ export class Toolbar {
     `;
     imageButton.title = 'Upload image';
     imageButton.setAttribute('aria-label', 'Upload image');
-    imageButton.setAttribute('aria-pressed', 'false');
     imageButton.dataset.role = 'image';
-    imageButton.addEventListener('mousedown', (event) => {
-      event.preventDefault();
-      if (this.readOnly || !this.onPickImage) return;
+    onPress(imageButton, () => {
+      if (this.readOnly || imageButton.disabled || !this.onPickImage) return;
       imageButton.dataset.busy = 'true';
       this.sync();
       void this.onPickImage().finally(() => {
@@ -374,10 +346,8 @@ export class Toolbar {
     altButton.innerHTML = toolbarIcons.alt;
     altButton.title = 'Edit image alt text';
     altButton.setAttribute('aria-label', 'Edit image alt text');
-    altButton.setAttribute('aria-pressed', 'false');
     altButton.dataset.role = 'image-alt';
-    altButton.addEventListener('mousedown', (event) => {
-      event.preventDefault();
+    onPress(altButton, () => {
       if (this.readOnly || !this.onEditImageAlt || !isImageSelected(this.view.state)) return;
       this.onEditImageAlt();
       this.view.focus();
@@ -405,10 +375,9 @@ export class Toolbar {
         tableButton.innerHTML = action.label;
         tableButton.title = action.title;
         tableButton.setAttribute('aria-label', action.title);
-        tableButton.setAttribute('aria-pressed', 'false');
-        tableButton.addEventListener('mousedown', (event) => {
-          event.preventDefault();
-          if (this.readOnly) return;
+        tableButton.setAttribute('aria-haspopup', 'dialog');
+        onPress(tableButton, () => {
+          if (this.readOnly || tableButton.disabled) return;
           this.openGridPicker(tableButton);
         });
         this.actions.set(tableButton, {
@@ -438,10 +407,12 @@ export class Toolbar {
 
     this.gridPicker = new TableGridPicker(this.view, this.tableLimits);
 
-    const rect = anchor.getBoundingClientRect();
+    const anchorRect = (this.overflowContainer.contains(anchor) ? this.overflowButton : anchor).getBoundingClientRect();
     const editorRect = this.element.parentElement?.getBoundingClientRect() ?? document.body.getBoundingClientRect();
-    this.gridPicker.open(rect.left - editorRect.left, rect.bottom - editorRect.top + 4);
+    this.closeOverflow();
+    // Attach before opening so the picker can take focus for keyboard use.
     this.element.parentElement?.append(this.gridPicker.element);
+    this.gridPicker.open(anchorRect.left - editorRect.left, anchorRect.bottom - editorRect.top + 4);
   }
 
   private closeGridPicker() {
@@ -599,10 +570,10 @@ export class Toolbar {
     button.innerHTML = config.label;
     button.title = config.title;
     button.setAttribute('aria-label', config.title);
-    button.setAttribute('aria-pressed', 'false');
-    button.addEventListener('mousedown', (event) => {
-      event.preventDefault();
-      if (this.readOnly) return;
+    if (config.isActive) button.setAttribute('aria-pressed', 'false');
+    if (config.role) button.dataset.role = config.role;
+    onPress(button, () => {
+      if (this.readOnly || button.disabled) return;
 
       const result = config.command(this.view);
       if (result instanceof Promise) {
@@ -616,11 +587,62 @@ export class Toolbar {
         return;
       }
 
-      this.view.focus();
+      if (config.role !== 'link') this.view.focus();
       this.sync();
     });
     this.actions.set(button, config);
     group.append(button);
+  }
+
+  private openLinkEditor() {
+    const linkButton = this.element.querySelector<HTMLElement>('[data-role="link"]');
+    const container = this.element.parentElement;
+    if (!linkButton || !container) return false;
+
+    const anchor = this.overflowContainer.contains(linkButton) ? this.overflowButton : linkButton;
+    const btnRect = anchor.getBoundingClientRect();
+    const existing = getActiveLink(this.view.state);
+    this.closeOverflow();
+
+    this.linkEditor.open({
+      container,
+      coords: { left: btnRect.left, top: btnRect.bottom + 4 },
+      anchorHref: existing?.href,
+      onConfirm: (value) => {
+        const href = normalizeHref(value);
+        if (!href) return false;
+        run(this.view, setLink(href));
+        return true;
+      },
+      onRemove: existing ? () => run(this.view, removeLink()) : undefined,
+      onClose: () => {
+        this.view.focus();
+        this.sync();
+      }
+    });
+    return true;
+  }
+
+  private getFocusables() {
+    return Array.from(
+      this.element.querySelectorAll<HTMLElement>('button:not([hidden]):not(:disabled), select:not([hidden]):not(:disabled)')
+    ).filter((element) => {
+      if (element.closest('[hidden]')) return false;
+      return this.overflowOpen || !this.overflowContainer.contains(element);
+    });
+  }
+
+  /** Keeps a single tab stop in the toolbar (WAI-ARIA toolbar pattern). */
+  private refreshRovingTabIndex(preferred?: HTMLElement) {
+    const focusables = this.getFocusables();
+    const all = this.element.querySelectorAll<HTMLElement>('button, select');
+    const current = preferred && focusables.includes(preferred)
+      ? preferred
+      : focusables.find((element) => element.tabIndex === 0) ?? focusables[0];
+
+    for (const element of all) {
+      element.tabIndex = element === current ? 0 : -1;
+    }
   }
 
   private setupOverflow() {
@@ -638,10 +660,8 @@ export class Toolbar {
     this.overflowButton.setAttribute('aria-haspopup', 'true');
     this.overflowButton.setAttribute('aria-expanded', 'false');
     this.overflowButton.setAttribute('aria-controls', overflowId);
-    this.overflowButton.addEventListener('mousedown', (event) => {
-      event.preventDefault();
-      this.toggleOverflow();
-    });
+    // detail === 0 means the click came from the keyboard (Enter/Space).
+    onPress(this.overflowButton, (event) => this.toggleOverflow(event.detail === 0));
 
     this.overflowGroup.className = 'oh-editor__toolbar-group oh-editor__toolbar-group--overflow';
     this.overflowGroup.setAttribute('role', 'group');
@@ -650,6 +670,7 @@ export class Toolbar {
     this.element.append(this.overflowGroup);
 
     this.element.addEventListener('keydown', this.boundHandleKeydown);
+    this.element.addEventListener('focusin', this.boundHandleFocusIn);
     document.addEventListener('mousedown', this.boundHandleDocumentMouseDown);
     window.addEventListener('resize', this.boundUpdateOverflow);
 
@@ -739,21 +760,26 @@ export class Toolbar {
     if (!hasOverflow && this.overflowOpen) {
       this.closeOverflow();
     }
+
+    this.refreshRovingTabIndex();
   }
 
-  private toggleOverflow() {
+  private toggleOverflow(focusFirst = false) {
     if (this.overflowOpen) {
       this.closeOverflow();
     } else {
-      this.openOverflow();
+      this.openOverflow(focusFirst);
     }
   }
 
-  private openOverflow() {
+  private openOverflow(focusFirst = false) {
     this.overflowOpen = true;
     this.overflowContainer.classList.add('is-open');
     this.overflowContainer.setAttribute('aria-hidden', 'false');
     this.overflowButton.setAttribute('aria-expanded', 'true');
+    if (focusFirst) {
+      this.overflowContainer.querySelector<HTMLElement>('button:not([hidden]):not(:disabled), select:not([hidden]):not(:disabled)')?.focus();
+    }
   }
 
   private closeOverflow() {
@@ -786,11 +812,9 @@ export class Toolbar {
     if (!isHorizontal && !isHomeEnd) return;
 
     const target = event.target as HTMLElement;
-    if (target.tagName !== 'BUTTON') return;
+    if (target.tagName !== 'BUTTON' && target.tagName !== 'SELECT') return;
 
-    const focusables = Array.from(
-      this.element.querySelectorAll<HTMLElement>('button:not([hidden]):not(:disabled), select:not([hidden]):not(:disabled)')
-    );
+    const focusables = this.getFocusables();
 
     const index = focusables.indexOf(target);
     if (index === -1) return;

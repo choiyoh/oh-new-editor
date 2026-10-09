@@ -2,30 +2,37 @@ import { NodeSelection } from 'prosemirror-state';
 import type { EditorState } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 
-const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
 const MOBILE_SHEET_MAX_WIDTH = 768;
 
 function shouldUseBottomSheet() {
-  return isTouchDevice || (typeof window !== 'undefined' && window.innerWidth < MOBILE_SHEET_MAX_WIDTH);
+  if (typeof window === 'undefined') return false;
+  // A coarse primary pointer (phones/tablets) rather than "has a touch screen",
+  // so touch-enabled laptops keep the inline popup.
+  const coarsePointer = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
+  return coarsePointer || window.innerWidth < MOBILE_SHEET_MAX_WIDTH;
 }
 
 import {
+  getActiveLink,
   insertCodeBlock,
   insertHR,
   insertParagraph,
+  removeLink,
   setCodeBlockLanguage,
   setHeading,
+  setLink,
   toggleBlockquote,
   toggleBold,
   toggleBulletList,
   toggleCode,
   toggleItalic,
-  toggleLink,
   toggleOrderedList,
   toggleStrike,
   toggleUnderline
 } from '../../commands';
 import type { EditorToolbarAction, EditorToolbarController } from '../../types';
+import { normalizeHref } from '../../utils/url';
+import { onPress } from '../dom';
 import { toolbarIcons } from '../icons';
 import { LinkEditor } from '../LinkEditor';
 import { TableGridPicker } from '../menus/TableGridPicker';
@@ -61,7 +68,8 @@ function getSlashMatch(state: EditorState) {
   if (!$from.parent.isTextblock) return null;
 
   const textBefore = $from.parent.textBetween(0, $from.parentOffset, undefined, '\0');
-  const match = /(?:^|\s)\/(?<query>[\w-]*)$/.exec(textBefore);
+  // Any run of non-space characters, so Hangul/CJK queries such as "/제목" match.
+  const match = /(?:^|\s)\/(?<query>[^\s/]*)$/.exec(textBefore);
   if (!match?.groups) return null;
 
   const query = match.groups.query ?? '';
@@ -100,21 +108,6 @@ function isImageSelected(state: EditorState) {
   return state.selection instanceof NodeSelection && state.selection.node.type === state.schema.nodes.image;
 }
 
-function isLinkAtCursor(state: EditorState) {
-  const { from, empty } = state.selection;
-  if (!empty) return false;
-  const marks = state.storedMarks ?? state.selection.$from.marks();
-  return Boolean(state.schema.marks.link?.isInSet(marks));
-}
-
-function getActiveLinkHref(state: EditorState): string | null {
-  const linkMark = state.schema.marks.link;
-  if (!linkMark) return null;
-  const marks = state.storedMarks ?? state.selection.$from.marks();
-  const link = linkMark.isInSet(marks);
-  return link?.attrs.href ?? null;
-}
-
 const CHOSEONG = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
 
 function getChoseong(str: string): string {
@@ -136,6 +129,9 @@ export class NotionUi implements EditorToolbarController {
   private readonly codeLanguage = document.createElement('select');
   private readonly slashItems: SlashItem[];
   private selectedSlashIndex = 0;
+  private slashQuery: string | null = null;
+  private dismissedSlashFrom: number | null = null;
+  private keyTarget: HTMLElement;
   private readOnly = false;
   private readonly onEditImageAlt?: () => void;
   private readonly tableLimits?: { maxRows?: number; maxCols?: number };
@@ -190,6 +186,9 @@ export class NotionUi implements EditorToolbarController {
     this.slash.className = 'oh-editor__slash-menu';
     this.slash.hidden = true;
     this.slashList.className = 'oh-editor__slash-list';
+    this.slashList.id = `oh-editor-slash-${Math.random().toString(36).slice(2, 9)}`;
+    this.slashList.setAttribute('role', 'listbox');
+    this.slashList.setAttribute('aria-label', 'Insert block');
     this.slash.append(this.slashList);
 
     this.codeLanguage.className = 'oh-editor__code-language-chip';
@@ -212,7 +211,10 @@ export class NotionUi implements EditorToolbarController {
     this.element.append(this.bubble, this.slash, this.codeLanguage);
     this.slashItems = this.createSlashItems(options);
 
-    this.view.dom.addEventListener('keydown', this.handleKeyDown);
+    // Capture on the content wrapper so the slash menu sees Enter/arrows before
+    // ProseMirror's own keydown handling (which would split the block).
+    this.keyTarget = this.view.dom.parentElement ?? this.view.dom;
+    this.keyTarget.addEventListener('keydown', this.handleKeyDown, true);
     this.view.dom.addEventListener('input', this.handleInput);
 
     if (typeof window !== 'undefined' && window.visualViewport) {
@@ -239,8 +241,11 @@ export class NotionUi implements EditorToolbarController {
   }
 
   destroy() {
-    this.view.dom.removeEventListener('keydown', this.handleKeyDown);
+    this.keyTarget.removeEventListener('keydown', this.handleKeyDown, true);
     this.view.dom.removeEventListener('input', this.handleInput);
+    this.view.dom.removeAttribute('aria-expanded');
+    this.view.dom.removeAttribute('aria-controls');
+    this.view.dom.removeAttribute('aria-activedescendant');
 
     if (typeof window !== 'undefined' && window.visualViewport) {
       window.visualViewport.removeEventListener('resize', this.handleVisualViewportResize);
@@ -261,13 +266,10 @@ export class NotionUi implements EditorToolbarController {
     this.gridPicker = new TableGridPicker(this.view, this.tableLimits);
 
     const coords = this.view.coordsAtPos(this.view.state.selection.from);
-    this.gridPicker.open(0, 0);
-    this.element.append(this.gridPicker.element);
-
-    // Position after append so we can measure
     const editorRect = this.element.getBoundingClientRect();
-    this.gridPicker.element.style.left = `${coords.left - editorRect.left}px`;
-    this.gridPicker.element.style.top = `${coords.bottom - editorRect.top + 8}px`;
+    // Attach before opening so the picker can take focus for keyboard use.
+    this.element.append(this.gridPicker.element);
+    this.gridPicker.open(coords.left - editorRect.left, coords.bottom - editorRect.top + 8);
   }
 
   private closeGridPicker() {
@@ -280,22 +282,19 @@ export class NotionUi implements EditorToolbarController {
   private openLinkEditor() {
     const container = this.element;
     const coords = this.view.coordsAtPos(this.view.state.selection.from);
-    const existingHref = getActiveLinkHref(this.view.state);
+    const existing = getActiveLink(this.view.state);
 
     this.linkEditor.open({
       container,
       coords: { left: coords.left, top: coords.bottom + 4 },
-      anchorHref: existingHref ?? undefined,
-      onConfirm: (href) => {
-        run(this.view, toggleLink(href));
-        this.view.focus();
-        this.sync();
+      anchorHref: existing?.href,
+      onConfirm: (value) => {
+        const href = normalizeHref(value);
+        if (!href) return false;
+        run(this.view, setLink(href));
+        return true;
       },
-      onRemove: existingHref ? () => {
-        run(this.view, toggleLink(existingHref));
-        this.view.focus();
-        this.sync();
-      } : undefined,
+      onRemove: existing ? () => run(this.view, removeLink()) : undefined,
       onClose: () => {
         this.view.focus();
         this.sync();
@@ -308,34 +307,30 @@ export class NotionUi implements EditorToolbarController {
   };
 
   private readonly handleKeyDown = (event: KeyboardEvent) => {
-    if (this.readOnly || this.slash.hidden) return;
+    if (this.readOnly || !this.isSlashOpen()) return;
+    if (!(event.target instanceof Node) || !this.view.dom.contains(event.target)) return;
+    // Let the IME finish composing (e.g. Korean) before handling Enter/arrows.
+    if (event.isComposing || event.keyCode === 229) return;
+    if (!['ArrowDown', 'ArrowUp', 'Escape', 'Enter', 'Tab'].includes(event.key)) return;
 
     const visibleItems = this.getVisibleSlashItems();
     if (!visibleItems.length) return;
 
+    // Handled here only: keep ProseMirror from also acting on the key.
+    event.preventDefault();
+    event.stopPropagation();
+
     if (event.key === 'ArrowDown') {
-      event.preventDefault();
       this.selectedSlashIndex = (this.selectedSlashIndex + 1) % visibleItems.length;
       this.renderSlashItems();
-      return;
-    }
-
-    if (event.key === 'ArrowUp') {
-      event.preventDefault();
+    } else if (event.key === 'ArrowUp') {
       this.selectedSlashIndex = (this.selectedSlashIndex - 1 + visibleItems.length) % visibleItems.length;
       this.renderSlashItems();
-      return;
-    }
-
-    if (event.key === 'Escape') {
-      event.preventDefault();
+    } else if (event.key === 'Escape') {
+      // Remember the dismissed "/" so typing more does not reopen the menu.
+      this.dismissedSlashFrom = getSlashMatch(this.view.state)?.from ?? null;
       this.hideSlashMenu();
-      this.view.focus();
-      return;
-    }
-
-    if (event.key === 'Enter') {
-      event.preventDefault();
+    } else {
       void this.applySlashItem(visibleItems[this.selectedSlashIndex] ?? null);
     }
   };
@@ -345,7 +340,7 @@ export class NotionUi implements EditorToolbarController {
     title: string;
     action: () => unknown;
     isActive: () => boolean;
-    context: 'text' | 'image' | 'link';
+    context: 'text' | 'image';
   }[] = [];
 
   private bubbleButtons: HTMLButtonElement[] = [];
@@ -377,11 +372,10 @@ export class NotionUi implements EditorToolbarController {
       button.innerHTML = icon;
       button.title = title;
       button.setAttribute('aria-label', title);
-      button.addEventListener('mousedown', (event) => {
-        event.preventDefault();
+      onPress(button, () => {
         if (this.readOnly) return;
         action();
-        this.view.focus();
+        if (!this.linkEditor.isOpen) this.view.focus();
         this.sync();
       });
       this.bubbleButtons.push(button);
@@ -389,9 +383,8 @@ export class NotionUi implements EditorToolbarController {
     }
   }
 
-  private getBubbleContext(): 'text' | 'image' | 'link' {
+  private getBubbleContext(): 'text' | 'image' {
     if (isImageSelected(this.view.state)) return 'image';
-    if (isLinkAtCursor(this.view.state)) return 'link';
     return 'text';
   }
 
@@ -424,10 +417,7 @@ export class NotionUi implements EditorToolbarController {
       const action = this.bubbleActions[i];
       const button = this.bubbleButtons[i];
 
-      let visible = false;
-      if (context === 'image') visible = action.context === 'image';
-      else if (context === 'link') visible = action.context === 'text';
-      else visible = action.context === 'text';
+      const visible = action.context === context;
 
       button.hidden = !visible;
       if (visible) {
@@ -537,23 +527,38 @@ export class NotionUi implements EditorToolbarController {
     if (!match || this.readOnly) return [];
 
     const query = match.query.trim().toLowerCase();
-    const queryChoseong = getChoseong(query);
+    // Initial-consonant search ("ㅈㅁ" -> "제목") only for queries made of jamo.
+    const isChoseongQuery = /^[ㄱ-ㅎ]+$/.test(query);
     return this.slashItems.filter((item) => {
       if (!query) return true;
       return item.label.toLowerCase().includes(query)
         || item.keywords.some((word) => word.includes(query))
-        || item.keywords.some((word) => getChoseong(word).includes(queryChoseong));
+        || (isChoseongQuery && item.keywords.some((word) => getChoseong(word).includes(query)));
     });
+  }
+
+  private isSlashOpen() {
+    return !this.slash.hidden;
   }
 
   private syncSlash() {
     const match = getSlashMatch(this.view.state);
     const visibleItems = this.getVisibleSlashItems();
 
-    if (!match || !visibleItems.length || this.readOnly) {
+    if (match?.from !== this.dismissedSlashFrom) {
+      this.dismissedSlashFrom = null;
+    }
+
+    if (!match || !visibleItems.length || this.readOnly || this.dismissedSlashFrom !== null) {
       this.hideSlashMenu();
       return;
     }
+
+    // Start from the first item whenever the menu opens or the query changes.
+    if (!this.isSlashOpen() || match.query !== this.slashQuery) {
+      this.selectedSlashIndex = 0;
+    }
+    this.slashQuery = match.query;
 
     if (shouldUseBottomSheet()) {
       this.openSlashSheet();
@@ -569,6 +574,8 @@ export class NotionUi implements EditorToolbarController {
 
     this.selectedSlashIndex = Math.min(this.selectedSlashIndex, visibleItems.length - 1);
     this.renderSlashItems();
+    this.view.dom.setAttribute('aria-controls', this.slashList.id);
+    this.view.dom.setAttribute('aria-expanded', 'true');
   }
 
   private renderSlashItems() {
@@ -578,35 +585,43 @@ export class NotionUi implements EditorToolbarController {
     const match = getSlashMatch(this.view.state);
     const query = match?.query.trim().toLowerCase() ?? '';
     let lastCategory = '';
+    let activeButton: HTMLButtonElement | null = null;
 
     visibleItems.forEach((item, index) => {
       if (item.category !== lastCategory) {
         lastCategory = item.category;
         const header = document.createElement('div');
         header.className = 'oh-editor__slash-category';
+        header.setAttribute('role', 'presentation');
         header.textContent = item.category;
         this.slashList.append(header);
       }
 
+      const active = index === this.selectedSlashIndex;
       const button = document.createElement('button');
       const icon = document.createElement('span');
       const copy = document.createElement('span');
       const label = document.createElement('span');
       button.type = 'button';
+      button.tabIndex = -1;
+      button.id = `${this.slashList.id}-${index}`;
       button.className = 'oh-editor__slash-item';
-      button.dataset.active = index === this.selectedSlashIndex ? 'true' : 'false';
+      button.setAttribute('role', 'option');
+      button.setAttribute('aria-selected', String(active));
+      button.dataset.active = active ? 'true' : 'false';
       icon.className = 'oh-editor__slash-item-icon';
+      icon.setAttribute('aria-hidden', 'true');
       icon.innerHTML = item.icon;
       copy.className = 'oh-editor__slash-item-copy';
       label.className = 'oh-editor__slash-item-label';
       copy.append(label);
 
-      if (query && item.label.toLowerCase().includes(query)) {
-        const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        label.innerHTML = item.label.replace(
-          new RegExp(`(${escaped})`, 'i'),
-          '<mark class="oh-editor__slash-item-highlight">$1</mark>'
-        );
+      const matchIndex = query ? item.label.toLowerCase().indexOf(query) : -1;
+      if (matchIndex >= 0) {
+        const highlight = document.createElement('mark');
+        highlight.className = 'oh-editor__slash-item-highlight';
+        highlight.textContent = item.label.slice(matchIndex, matchIndex + query.length);
+        label.append(item.label.slice(0, matchIndex), highlight, item.label.slice(matchIndex + query.length));
       } else {
         label.textContent = item.label;
       }
@@ -619,12 +634,17 @@ export class NotionUi implements EditorToolbarController {
       }
 
       button.append(icon, copy);
-      button.addEventListener('mousedown', (event) => {
-        event.preventDefault();
+      onPress(button, () => {
         void this.applySlashItem(item);
       });
       this.slashList.append(button);
+      if (active) activeButton = button;
     });
+
+    if (activeButton) {
+      this.view.dom.setAttribute('aria-activedescendant', (activeButton as HTMLButtonElement).id);
+      (activeButton as HTMLButtonElement).scrollIntoView?.({ block: 'nearest' });
+    }
   }
 
   private async applySlashItem(item: SlashItem | null) {
@@ -635,14 +655,19 @@ export class NotionUi implements EditorToolbarController {
       this.view.dispatch(this.view.state.tr.delete(match.from, match.to));
     }
 
-    await item.run();
-    this.view.focus();
     this.hideSlashMenu();
+    await item.run();
+    // The table grid picker takes focus for keyboard selection; leave it there.
+    if (!this.gridPicker) this.view.focus();
     this.sync();
   }
 
   private hideSlashMenu() {
     this.slash.hidden = true;
+    this.slashQuery = null;
+    this.view.dom.removeAttribute('aria-activedescendant');
+    this.view.dom.removeAttribute('aria-controls');
+    this.view.dom.setAttribute('aria-expanded', 'false');
     this.closeSlashSheet();
     this.attachSlashToPopup();
   }

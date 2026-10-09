@@ -52,6 +52,10 @@ function createPlaceholderElement(spec: PlaceholderSpec, onRetry?: () => void) {
     button.addEventListener('mousedown', (event) => {
       event.preventDefault();
       event.stopPropagation();
+    });
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
       onRetry();
     });
     element.append(button);

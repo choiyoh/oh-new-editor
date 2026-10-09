@@ -19,6 +19,8 @@ export class TableGridPicker {
     this.element.className = 'oh-editor__grid-picker';
     this.element.hidden = true;
     this.element.tabIndex = -1;
+    this.element.setAttribute('role', 'dialog');
+    this.element.setAttribute('aria-label', 'Insert table: use arrow keys to choose a size, Enter to insert');
     this.render();
     this.element.addEventListener('keydown', this.handleKeyDown);
     document.addEventListener('mousedown', this.handleClickOutside, true);
@@ -101,6 +103,7 @@ export class TableGridPicker {
       case 'Escape':
         event.preventDefault();
         this.close();
+        this.view.focus();
         break;
     }
   };
@@ -142,6 +145,7 @@ export class TableGridPicker {
 
     const label = document.createElement('div');
     label.className = 'oh-editor__grid-picker-label';
+    label.setAttribute('aria-live', 'polite');
 
     this.element.append(grid, label);
     this.element.addEventListener('mouseleave', () => {

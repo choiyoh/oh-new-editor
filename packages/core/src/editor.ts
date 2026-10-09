@@ -30,6 +30,15 @@ function createEventStore() {
   );
 }
 
+function isSelectionInTableCell(state: EditorState) {
+  const { $from } = state.selection;
+  for (let depth = $from.depth; depth > 0; depth -= 1) {
+    const role = $from.node(depth).type.spec.tableRole;
+    if (role === 'cell' || role === 'header_cell') return true;
+  }
+  return false;
+}
+
 function createPlugins(options: EditorOptions, schema: EditorSchema) {
   return [
     createHistoryPlugin(),
@@ -197,9 +206,12 @@ class ProseMirrorEditor implements Editor {
     this.emit('focus');
   };
 
-  private readonly handleBlur = () => {
+  private readonly handleBlur = (event: FocusEvent) => {
     this.toolbar?.sync();
-    this.menuController?.close();
+    // Moving focus into the table menu (keyboard navigation) keeps it open.
+    if (!this.menuController?.contains(event.relatedTarget)) {
+      this.menuController?.close();
+    }
     this.emit('blur');
   };
 
@@ -312,26 +324,39 @@ class ProseMirrorEditor implements Editor {
           }
 
           const target = event.target;
-          if (!(target instanceof HTMLElement) || !target.closest('td, th')) {
+          const clickedCell = target instanceof HTMLElement ? target.closest('td, th') : null;
+          // Keyboard-initiated context menus (Shift+F10, Menu key) target the
+          // editor itself; open the menu at the cursor when it sits in a cell.
+          const fromKeyboard = !clickedCell && target === view.dom && isSelectionInTableCell(view.state);
+          if (!clickedCell && !fromKeyboard) {
             this.menuController.close();
             return false;
           }
 
-          const coords = view.posAtCoords({ left: event.clientX, top: event.clientY });
-          if (!coords) {
-            return false;
+          let left = event.clientX;
+          let top = event.clientY;
+          if (fromKeyboard) {
+            const coords = view.coordsAtPos(view.state.selection.from);
+            left = coords.left;
+            top = coords.bottom;
+          } else {
+            const coords = view.posAtCoords({ left: event.clientX, top: event.clientY });
+            if (!coords) {
+              return false;
+            }
+
+            // Keep an existing (cell) selection that already covers the clicked
+            // position so "Merge cells" stays available; otherwise move the
+            // cursor into the clicked cell.
+            const { from, to } = view.state.selection;
+            if (coords.pos < from || coords.pos > to) {
+              view.dispatch(view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(coords.pos))));
+            }
           }
 
           event.preventDefault();
-          // Keep an existing (cell) selection that already covers the clicked
-          // position so "Merge cells" stays available; otherwise move the
-          // cursor into the clicked cell.
-          const { from, to } = view.state.selection;
-          if (coords.pos < from || coords.pos > to) {
-            view.dispatch(view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(coords.pos))));
-          }
           const hostRect = this.host.getBoundingClientRect();
-          this.menuController.open(event.clientX - hostRect.left, event.clientY - hostRect.top);
+          this.menuController.open(left - hostRect.left, top - hostRect.top);
           return true;
         }
       },

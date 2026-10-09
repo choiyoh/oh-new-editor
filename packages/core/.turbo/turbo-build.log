@@ -4,31 +4,31 @@
 
 vite v7.3.1 building client environment for production...
 transforming...
-✓ 50 modules transformed.
+✓ 51 modules transformed.
 rendering chunks...
 
 [vite:dts] Start generate declaration files...
 computing gzip size...
-dist/style.css                     25.72 kB │ gzip:   4.75 kB
+dist/style.css                     26.02 kB │ gzip:   4.81 kB
 dist/ai.mjs                         0.11 kB │ gzip:   0.12 kB │ map:     0.09 kB
-dist/index.mjs                      0.89 kB │ gzip:   0.46 kB │ map:     0.09 kB
-dist/icons-sfbyyLjZ.js              3.70 kB │ gzip:   1.36 kB │ map:     6.39 kB
-dist/TableGridPicker-DrGpBhjS.js    8.07 kB │ gzip:   1.95 kB │ map:    17.09 kB
-dist/notion.mjs                    20.01 kB │ gzip:   5.53 kB │ map:    45.67 kB
-dist/toolbar.mjs                   20.88 kB │ gzip:   5.32 kB │ map:    49.44 kB
-dist/table.mjs                     54.22 kB │ gzip:  14.73 kB │ map:   178.52 kB
+dist/index.mjs                      1.06 kB │ gzip:   0.53 kB │ map:     0.09 kB
+dist/icons-CZ3ycKB9.js              3.99 kB │ gzip:   1.45 kB │ map:     7.61 kB
+dist/TableGridPicker-BRsOII-Y.js    9.31 kB │ gzip:   2.34 kB │ map:    19.70 kB
+dist/notion.mjs                    20.88 kB │ gzip:   5.89 kB │ map:    48.47 kB
+dist/toolbar.mjs                   21.45 kB │ gzip:   5.61 kB │ map:    51.10 kB
+dist/table.mjs                     55.24 kB │ gzip:  15.06 kB │ map:   180.82 kB
 dist/markdown.mjs                  69.28 kB │ gzip:  18.67 kB │ map:   140.38 kB
-dist/index-DWdUSTWI.js            404.86 kB │ gzip: 111.55 kB │ map: 1,149.87 kB
-[vite:dts] Declaration files built in 675ms.
+dist/index-FRb8iEUy.js            410.00 kB │ gzip: 113.14 kB │ map: 1,164.26 kB
+[vite:dts] Declaration files built in 741ms.
 
-dist/style.css                      25.72 kB │ gzip:  4.75 kB
+dist/style.css                      26.02 kB │ gzip:  4.81 kB
 dist/ai.cjs                          0.19 kB │ gzip:  0.18 kB │ map:     0.09 kB
-dist/index.cjs                       1.18 kB │ gzip:  0.44 kB │ map:     0.09 kB
-dist/icons-D9BJfENS.cjs              3.20 kB │ gzip:  1.30 kB │ map:     5.90 kB
-dist/TableGridPicker-EKzaL7-Z.cjs    6.84 kB │ gzip:  1.81 kB │ map:    16.69 kB
-dist/notion.cjs                     17.04 kB │ gzip:  5.12 kB │ map:    44.74 kB
-dist/toolbar.cjs                    17.50 kB │ gzip:  4.85 kB │ map:    48.38 kB
-dist/table.cjs                      40.32 kB │ gzip: 13.03 kB │ map:   174.80 kB
+dist/index.cjs                       1.38 kB │ gzip:  0.50 kB │ map:     0.09 kB
+dist/icons-CYfAn8zR.cjs              3.44 kB │ gzip:  1.40 kB │ map:     7.08 kB
+dist/TableGridPicker-D6ZrXxEJ.cjs    7.97 kB │ gzip:  2.19 kB │ map:    19.27 kB
+dist/notion.cjs                     18.00 kB │ gzip:  5.48 kB │ map:    47.61 kB
+dist/toolbar.cjs                    18.10 kB │ gzip:  5.09 kB │ map:    50.05 kB
+dist/table.cjs                      41.08 kB │ gzip: 13.30 kB │ map:   177.09 kB
 dist/markdown.cjs                   52.80 kB │ gzip: 16.84 kB │ map:   136.09 kB
-dist/index-DRSWi4VI.cjs            261.93 kB │ gzip: 82.77 kB │ map: 1,118.69 kB
-✓ built in 1.50s
+dist/index-BuH9ESF2.cjs            265.88 kB │ gzip: 84.17 kB │ map: 1,132.92 kB
+✓ built in 1.51s
