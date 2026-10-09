@@ -1,6 +1,7 @@
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { Decoration, DecorationSet, type EditorView } from 'prosemirror-view';
 
+import { DEFAULT_MESSAGES, formatMessage, type EditorMessages } from '../i18n';
 import type { EditorImageOptions } from '../types';
 
 const DEFAULT_MAX_IMAGE_SIZE = 10_000_000;
@@ -18,8 +19,8 @@ type PlaceholderSpec = {
 };
 
 type UploadPluginMeta =
-  | { type: 'add'; id: string; pos: number; fileName: string; message: string; status: UploadStatus; file?: File; retryable?: boolean }
-  | { type: 'update'; id: string; fileName: string; message: string; status: UploadStatus; file?: File; retryable?: boolean }
+  | ({ type: 'add'; pos: number } & PlaceholderSpec)
+  | ({ type: 'update' } & PlaceholderSpec)
   | { type: 'remove'; id: string };
 
 type NormalizedImageOptions = Required<Pick<EditorImageOptions, 'upload'>> & {
@@ -33,22 +34,27 @@ export type UploadLifecycle = {
 
 const imageUploadPluginKey = new PluginKey<DecorationSet>('oh-editor-image-upload');
 
-function createPlaceholderElement(spec: PlaceholderSpec, onRetry?: () => void) {
+type PlaceholderActions = {
+  onRetry?: () => void;
+  onDismiss: () => void;
+};
+
+function createPlaceholderElement(spec: PlaceholderSpec, actions: PlaceholderActions, messages: EditorMessages) {
   const element = document.createElement('span');
   element.className = `oh-editor__upload-placeholder oh-editor__upload-placeholder--${spec.status}`;
   element.title = spec.fileName;
-  element.setAttribute('aria-label', spec.message);
+  element.setAttribute('role', spec.status === 'error' ? 'alert' : 'status');
 
   const message = document.createElement('span');
   message.className = 'oh-editor__upload-message';
   message.textContent = spec.message;
   element.append(message);
 
-  if (spec.status === 'error' && spec.retryable && onRetry) {
+  const addButton = (className: string, label: string, onClick: () => void) => {
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = 'oh-editor__upload-retry';
-    button.textContent = 'Retry';
+    button.className = className;
+    button.textContent = label;
     button.addEventListener('mousedown', (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -56,9 +62,16 @@ function createPlaceholderElement(spec: PlaceholderSpec, onRetry?: () => void) {
     button.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
-      onRetry();
+      onClick();
     });
     element.append(button);
+  };
+
+  if (spec.status === 'error') {
+    if (spec.retryable && actions.onRetry) {
+      addButton('oh-editor__upload-retry', messages.uploadRetry, actions.onRetry);
+    }
+    addButton('oh-editor__upload-dismiss', messages.uploadDismiss, actions.onDismiss);
   }
 
   return element;
@@ -84,13 +97,13 @@ function normalizeImageOptions(options?: EditorImageOptions): NormalizedImageOpt
   };
 }
 
-function validateImageFile(file: File, options: NormalizedImageOptions) {
+function validateImageFile(file: File, options: NormalizedImageOptions, messages: EditorMessages) {
   if (!options.accept.includes(file.type)) {
-    return `Unsupported image type: ${file.type || file.name}`;
+    return formatMessage(messages.uploadUnsupportedType, { type: file.type || file.name });
   }
 
   if (file.size > options.maxSize) {
-    return `Image exceeds ${Math.round(options.maxSize / 1_000_000)} MB limit: ${file.name}`;
+    return formatMessage(messages.uploadTooLarge, { limit: Math.round(options.maxSize / 1_000_000), name: file.name });
   }
 
   return null;
@@ -100,21 +113,49 @@ function nextUploadId() {
   return `upload-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function uploadSingleImage(view: EditorView, file: File, options: NormalizedImageOptions, pos: number, lifecycle: UploadLifecycle) {
-  const error = validateImageFile(file, options);
+/**
+ * Runs the upload for the existing placeholder `id` and swaps the placeholder
+ * for the image (or an error state) when it settles.
+ */
+function startUpload(view: EditorView, id: string, file: File, options: NormalizedImageOptions, lifecycle: UploadLifecycle, messages: EditorMessages) {
+  void options.upload(file)
+    .then((src) => {
+      if (!lifecycle.isAlive()) return;
+      const decorations = imageUploadPluginKey.getState(view.state);
+      const placeholder = decorations ? getPlaceholderDecoration(decorations, id) : null;
+      if (!placeholder) return;
+      if (!src) throw new Error(messages.uploadEmptyUrl);
+
+      const image = view.state.schema.nodes.image.create({ src, alt: file.name });
+      const tr = view.state.tr
+        .insert(placeholder.from, image)
+        .setMeta(imageUploadPluginKey, { type: 'remove', id } satisfies UploadPluginMeta);
+      view.dispatch(tr.scrollIntoView());
+    })
+    .catch((error: unknown) => {
+      if (!lifecycle.isAlive()) return;
+      const decorations = imageUploadPluginKey.getState(view.state);
+      if (!decorations || !getPlaceholderDecoration(decorations, id)) return;
+      dispatchMeta(view, {
+        type: 'update',
+        id,
+        fileName: file.name,
+        message: error instanceof Error && error.message
+          ? formatMessage(messages.uploadFailedWithReason, { reason: error.message })
+          : formatMessage(messages.uploadFailed, { name: file.name }),
+        status: 'error',
+        file,
+        retryable: true
+      });
+    });
+}
+
+function uploadSingleImage(view: EditorView, file: File, options: NormalizedImageOptions, pos: number, lifecycle: UploadLifecycle, messages: EditorMessages) {
+  const error = validateImageFile(file, options, messages);
   const id = nextUploadId();
 
   if (error) {
-    dispatchMeta(view, {
-      type: 'add',
-      id,
-      pos,
-      fileName: file.name,
-      message: error,
-      status: 'error',
-      file,
-      retryable: false
-    });
+    dispatchMeta(view, { type: 'add', id, pos, fileName: file.name, message: error, status: 'error', file, retryable: false });
     return;
   }
 
@@ -123,52 +164,38 @@ function uploadSingleImage(view: EditorView, file: File, options: NormalizedImag
     id,
     pos,
     fileName: file.name,
-    message: `Uploading ${file.name}…`,
+    message: formatMessage(messages.uploadUploading, { name: file.name }),
     status: 'uploading',
     file,
     retryable: false
   });
-
-  void options.upload(file)
-    .then((src) => {
-      if (!lifecycle.isAlive()) return;
-      const decorations = imageUploadPluginKey.getState(view.state);
-      const placeholder = decorations ? getPlaceholderDecoration(decorations, id) : null;
-      if (!placeholder || !src) return;
-
-      const tr = view.state.tr
-        .insert(placeholder.from, view.state.schema.nodes.image.create({ src, alt: file.name }))
-        .setMeta(imageUploadPluginKey, { type: 'remove', id } satisfies UploadPluginMeta);
-
-      view.dispatch(tr.scrollIntoView());
-    })
-    .catch((error_: unknown) => {
-      if (!lifecycle.isAlive()) return;
-      dispatchMeta(view, {
-        type: 'update',
-        id,
-        fileName: file.name,
-        message: error_ instanceof Error ? `Upload failed: ${error_.message}` : `Upload failed: ${file.name}`,
-        status: 'error',
-        file,
-        retryable: true
-      });
-    });
+  startUpload(view, id, file, options, lifecycle, messages);
 }
 
-export function uploadImageFiles(view: EditorView, files: Iterable<File>, options?: EditorImageOptions, pos = view.state.selection.from, lifecycle: UploadLifecycle = { isAlive: () => true }) {
+export function uploadImageFiles(
+  view: EditorView,
+  files: Iterable<File>,
+  options?: EditorImageOptions,
+  pos = view.state.selection.from,
+  lifecycle: UploadLifecycle = { isAlive: () => true },
+  messages: EditorMessages = DEFAULT_MESSAGES
+) {
   const normalized = normalizeImageOptions(options);
   if (!normalized) {
     throw new Error('Image upload requires options.image.upload(file).');
   }
 
-  const fileList = Array.from(files);
-  for (const file of fileList) {
-    uploadSingleImage(view, file, normalized, pos, lifecycle);
+  for (const file of Array.from(files)) {
+    uploadSingleImage(view, file, normalized, pos, lifecycle, messages);
   }
 }
 
-export function createImageUploadPlugin(options?: EditorImageOptions) {
+function hasTextClipboardContent(data: DataTransfer | null) {
+  if (!data) return false;
+  return Boolean(data.getData('text/html').trim() || data.getData('text/plain').trim());
+}
+
+export function createImageUploadPlugin(options?: EditorImageOptions, messages: EditorMessages = DEFAULT_MESSAGES) {
   const normalized = normalizeImageOptions(options);
   let currentView: EditorView | null = null;
   let alive = true;
@@ -176,25 +203,36 @@ export function createImageUploadPlugin(options?: EditorImageOptions) {
     isAlive: () => alive && currentView !== null
   };
 
-  const createRetryHandler = (spec: PlaceholderSpec, pos: number) => {
-    if (!normalized || !spec.file || !spec.retryable || !currentView) {
-      return undefined;
-    }
-
-    return () => {
-      if (!currentView || !spec.file) return;
-      dispatchMeta(currentView, {
-        type: 'update',
-        id: spec.id,
-        fileName: spec.fileName,
-        message: `Uploading ${spec.fileName}…`,
-        status: 'uploading',
-        file: spec.file,
-        retryable: false
-      });
-      uploadSingleImage(currentView, spec.file, normalized, pos, lifecycle);
-    };
-  };
+  const createWidget = (pos: number, spec: PlaceholderSpec) =>
+    Decoration.widget(
+      pos,
+      () =>
+        createPlaceholderElement(
+          spec,
+          {
+            // Retry reuses the same placeholder, so a failed upload never
+            // leaves a stale "Uploading…" chip behind.
+            onRetry: normalized && spec.file && spec.retryable
+              ? () => {
+                  if (!currentView || !spec.file) return;
+                  dispatchMeta(currentView, {
+                    ...spec,
+                    type: 'update',
+                    message: formatMessage(messages.uploadUploading, { name: spec.fileName }),
+                    status: 'uploading',
+                    retryable: false
+                  });
+                  startUpload(currentView, spec.id, spec.file, normalized, lifecycle, messages);
+                }
+              : undefined,
+            onDismiss: () => {
+              if (currentView) dispatchMeta(currentView, { type: 'remove', id: spec.id });
+            }
+          },
+          messages
+        ),
+      { ...spec }
+    );
 
   return new Plugin<DecorationSet>({
     key: imageUploadPluginKey,
@@ -203,71 +241,24 @@ export function createImageUploadPlugin(options?: EditorImageOptions) {
         return DecorationSet.empty;
       },
       apply(tr, set) {
-        let next = set.map(tr.mapping, tr.doc);
+        const next = set.map(tr.mapping, tr.doc);
         const meta = tr.getMeta(imageUploadPluginKey) as UploadPluginMeta | undefined;
         if (!meta) return next;
 
+        const existing = getPlaceholderDecoration(next, meta.id);
+
         if (meta.type === 'remove') {
-          const decoration = getPlaceholderDecoration(next, meta.id);
-          return decoration ? next.remove([decoration]) : next;
+          return existing ? next.remove([existing]) : next;
         }
 
         if (meta.type === 'update') {
-          const decoration = getPlaceholderDecoration(next, meta.id);
-          if (!decoration) return next;
-          next = next.remove([decoration]);
-          return next.add(tr.doc, [
-            Decoration.widget(decoration.from, () =>
-              createPlaceholderElement({
-                id: meta.id,
-                fileName: meta.fileName,
-                message: meta.message,
-                status: meta.status,
-                file: meta.file,
-                retryable: meta.retryable
-              }, createRetryHandler({
-                id: meta.id,
-                fileName: meta.fileName,
-                message: meta.message,
-                status: meta.status,
-                file: meta.file,
-                retryable: meta.retryable
-              }, decoration.from)) , {
-              id: meta.id,
-              fileName: meta.fileName,
-              message: meta.message,
-              status: meta.status,
-              file: meta.file,
-              retryable: meta.retryable
-            })
-          ]);
+          if (!existing) return next;
+          const { type: _type, ...spec } = meta;
+          return next.remove([existing]).add(tr.doc, [createWidget(existing.from, spec)]);
         }
 
-        return next.add(tr.doc, [
-          Decoration.widget(meta.pos, () =>
-            createPlaceholderElement({
-              id: meta.id,
-              fileName: meta.fileName,
-              message: meta.message,
-              status: meta.status,
-              file: meta.file,
-              retryable: meta.retryable
-            }, createRetryHandler({
-              id: meta.id,
-              fileName: meta.fileName,
-              message: meta.message,
-              status: meta.status,
-              file: meta.file,
-              retryable: meta.retryable
-            }, meta.pos)), {
-            id: meta.id,
-            fileName: meta.fileName,
-            message: meta.message,
-            status: meta.status,
-            file: meta.file,
-            retryable: meta.retryable
-          })
-        ]);
+        const { type: _type, pos, ...spec } = meta;
+        return next.add(tr.doc, [createWidget(pos, spec)]);
       }
     },
     props: {
@@ -286,17 +277,20 @@ export function createImageUploadPlugin(options?: EditorImageOptions) {
               event.preventDefault();
               const coords = view.posAtCoords({ left: event.clientX, top: event.clientY });
               for (const file of files) {
-                uploadSingleImage(view, file, normalized, coords?.pos ?? view.state.selection.from, lifecycle);
+                uploadSingleImage(view, file, normalized, coords?.pos ?? view.state.selection.from, lifecycle, messages);
               }
               return true;
             },
             paste(view, event) {
               const files = Array.from(event.clipboardData?.files ?? []).filter((file) => file.type.startsWith('image/'));
               if (!files.length) return false;
+              // Office apps put both markup and a rendered image of it on the
+              // clipboard; keep the text and let the normal paste run.
+              if (hasTextClipboardContent(event.clipboardData)) return false;
 
               event.preventDefault();
               for (const file of files) {
-                uploadSingleImage(view, file, normalized, view.state.selection.from, lifecycle);
+                uploadSingleImage(view, file, normalized, view.state.selection.from, lifecycle, messages);
               }
               return true;
             }

@@ -11,6 +11,8 @@ import type {
 import type { EditorState, Plugin, Transaction } from 'prosemirror-state';
 import type { DirectEditorProps, EditorView } from 'prosemirror-view';
 
+import type { EditorMessages } from './i18n';
+
 export type {
   DOMOutputSpec,
   DirectEditorProps,
@@ -40,11 +42,14 @@ export interface EditorImageOptions {
 }
 
 export interface EditorMarkdownSupport {
-  parse: (content?: string) => EditorDocument;
+  /** `schema` is the editor's active schema (e.g. with table nodes). */
+  parse: (content?: string, schema?: EditorSchema) => EditorDocument;
   serialize: (doc: EditorDocument) => string;
 }
 
 export interface EditorToolbarAction {
+  /** Stable identifier; built-in UIs use it to look up a translated title. */
+  id?: string;
   label: string;
   title: string;
   run: (view: EditorView) => boolean | Promise<boolean>;
@@ -68,7 +73,7 @@ export interface EditorTableSupport {
   maxCols?: number;
   insertActions?: EditorToolbarAction[];
   actions?: EditorToolbarAction[];
-  createMenu?: (view: EditorView) => EditorMenuController;
+  createMenu?: (view: EditorView, messages?: EditorMessages) => EditorMenuController;
 }
 
 export interface EditorToolbarController {
@@ -88,6 +93,7 @@ export interface EditorToolbarSupport {
     insertActions?: EditorToolbarAction[];
     tableActions?: EditorToolbarAction[];
     tableLimits?: { maxRows?: number; maxCols?: number };
+    messages?: EditorMessages;
   }): EditorToolbarController;
 }
 
@@ -104,12 +110,11 @@ export interface AIContext {
   outputFormat: 'html' | 'markdown';
 }
 
-export type AIGenerationMode = 'insert' | 'replace';
-
 export interface EditorAIOptions {
   onGenerate: (prompt: string, context: AIContext, signal: AbortSignal) => Promise<string>;
   onStream?: (prompt: string, context: AIContext, signal: AbortSignal) => AsyncIterable<string>;
-  suggestions?: boolean;
+  /** Called when generation fails (not when it is cancelled). Text streamed so far is kept. */
+  onError?: (error: unknown) => void;
 }
 
 export interface EditorAIController {
@@ -138,6 +143,8 @@ export interface EditorOptions {
   schema?: Schema;
   /** AI collaboration hooks. */
   ai?: EditorAIOptions;
+  /** Overrides for built-in UI strings, e.g. `messagesKo` from `@oh-new-editor/core`. */
+  messages?: Partial<EditorMessages>;
 }
 
 export type EditorEventName = 'change' | 'focus' | 'blur' | 'ready';

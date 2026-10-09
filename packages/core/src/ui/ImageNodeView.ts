@@ -1,6 +1,8 @@
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
 import type { EditorView, NodeView } from 'prosemirror-view';
 
+import { DEFAULT_MESSAGES, type EditorMessages } from '../i18n';
+
 const MIN_WIDTH = 50;
 
 function toPx(value: string | number | null | undefined) {
@@ -21,7 +23,8 @@ export class ImageNodeView implements NodeView {
   constructor(
     private node: ProseMirrorNode,
     private readonly view: EditorView,
-    private readonly getPos: (() => number | undefined)
+    private readonly getPos: (() => number | undefined),
+    messages: EditorMessages = DEFAULT_MESSAGES
   ) {
     this.dom.className = 'oh-editor__image-node';
     this.dom.contentEditable = 'false';
@@ -32,8 +35,8 @@ export class ImageNodeView implements NodeView {
 
     this.handle.type = 'button';
     this.handle.className = 'oh-editor__image-resize-handle';
-    this.handle.title = 'Resize image';
-    this.handle.setAttribute('aria-label', 'Resize image');
+    this.handle.title = messages.resizeImage;
+    this.handle.setAttribute('aria-label', messages.resizeImage);
     this.handle.hidden = true;
     this.handle.addEventListener('mousedown', this.handleResizeStart);
     this.handle.addEventListener('touchstart', this.handleResizeStart, { passive: false });
@@ -167,12 +170,12 @@ export class ImageNodeView implements NodeView {
   };
 }
 
-export function createImageNodeView(view: EditorView) {
+export function createImageNodeView(view: EditorView, messages: EditorMessages = DEFAULT_MESSAGES) {
   return (node: ProseMirrorNode, _view: EditorView, getPos: boolean | (() => number | undefined)) => {
     if (typeof getPos !== 'function') {
       throw new Error('Expected image node position accessor');
     }
 
-    return new ImageNodeView(node, view, getPos);
+    return new ImageNodeView(node, view, getPos, messages);
   };
 }

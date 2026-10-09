@@ -1,3 +1,4 @@
+import type { EditorMessages } from '../i18n';
 import { onPress } from './dom';
 
 export type LinkEditorOptions = {
@@ -64,16 +65,16 @@ export class LinkEditor {
     return !this.element.hidden;
   }
 
-  setLabels(labels: { apply: string; cancel: string; remove: string; placeholder: string; inputLabel: string; invalid: string; dialog: string }) {
-    this.confirmButton.textContent = labels.apply;
-    this.confirmButton.setAttribute('aria-label', labels.apply);
-    this.cancelButton.setAttribute('aria-label', labels.cancel);
-    this.removeButton.textContent = labels.remove;
-    this.removeButton.setAttribute('aria-label', labels.remove);
-    this.urlInput.placeholder = labels.placeholder;
-    this.urlInput.setAttribute('aria-label', labels.inputLabel);
-    this.element.setAttribute('aria-label', labels.dialog);
-    this.error.dataset.message = labels.invalid;
+  setLabels(messages: EditorMessages) {
+    this.confirmButton.textContent = messages.linkApply;
+    this.confirmButton.setAttribute('aria-label', messages.linkApply);
+    this.cancelButton.setAttribute('aria-label', messages.linkCancel);
+    this.removeButton.textContent = messages.linkRemove;
+    this.removeButton.setAttribute('aria-label', messages.linkRemove);
+    this.urlInput.placeholder = messages.linkPlaceholder;
+    this.urlInput.setAttribute('aria-label', messages.linkUrl);
+    this.element.setAttribute('aria-label', messages.linkDialog);
+    this.error.dataset.message = messages.linkInvalid;
   }
 
   open(options: LinkEditorOptions) {

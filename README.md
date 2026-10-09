@@ -28,6 +28,7 @@ Oh New Editor provides a headless core plus optional UI and feature modules for 
 - Tables with insert, resize, merge/split, row/column actions, and size guards
 - CSS custom properties and dark mode via `data-theme="dark"`
 - Thin framework adapters for React, Vue, and Svelte
+- Built-in UI strings in English, Korean and Simplified Chinese
 
 ## Installation
 
@@ -113,9 +114,34 @@ editor.getContent('markdown');
 editor.setContent('<p>Hello</p>', 'html');
 editor.setOutputFormat('markdown');
 editor.setReadOnly(true);
-editor.on('change', () => {});
+editor.on('change', () => {}); // fires for document changes only
 editor.destroy();
 ```
+
+Link helpers work on the current selection (or the link under the cursor):
+
+```ts
+import { normalizeHref, removeLink, setLink } from '@oh-new-editor/core';
+
+const href = normalizeHref('example.com'); // 'https://example.com'
+```
+
+## Localization
+
+The built-in UI ships English strings by default. Pass a preset or a partial override:
+
+```ts
+import { createEditor, messagesKo } from '@oh-new-editor/core';
+
+createEditor(element, { messages: messagesKo });
+createEditor(element, { messages: { bold: 'Gras', italic: 'Italique' } });
+```
+
+Presets: `messagesKo`, `messagesZhCN`. Slash-command search understands English, Korean (including initial consonants such as `ㅈㅁ`) and Chinese keywords regardless of the UI language.
+
+## Accessibility
+
+Toolbar, bubble menu, table menu and link editor are keyboard operable: the toolbar is a single tab stop with arrow-key navigation, buttons respond to Enter/Space, the table menu opens with Shift+F10 / the Menu key inside a cell, and the slash menu exposes listbox semantics.
 
 ## Theming
 
@@ -131,6 +157,8 @@ Import the core stylesheet and override the provided tokens.
   --oh-editor-bg: #0f172a;
 }
 ```
+
+Set `data-theme="dark"` on any ancestor for the dark palette, or `data-theme="system"` to follow the OS setting.
 
 ## Development
 

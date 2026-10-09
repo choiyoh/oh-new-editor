@@ -22,6 +22,7 @@ import {
   toggleStrike,
   toggleUnderline
 } from '../../commands';
+import { DEFAULT_MESSAGES, formatMessage, type EditorMessages } from '../../i18n';
 import type { EditorToolbarAction } from '../../types';
 import { normalizeHref } from '../../utils/url';
 import { onPress } from '../dom';
@@ -130,6 +131,7 @@ export class Toolbar {
   private readonly tableLimits?: { maxRows?: number; maxCols?: number };
   private gridPicker: TableGridPicker | null = null;
   private readOnly = false;
+  private readonly messages: EditorMessages;
   private linkEditor: LinkEditor = new LinkEditor();
 
   private readonly toolbarGroups: HTMLElement[] = [];
@@ -161,8 +163,11 @@ export class Toolbar {
       insertActions?: EditorToolbarAction[];
       tableActions?: EditorToolbarAction[];
       tableLimits?: { maxRows?: number; maxCols?: number };
+      messages?: EditorMessages;
     } = {}
   ) {
+    this.messages = options.messages ?? DEFAULT_MESSAGES;
+    this.linkEditor.setLabels(this.messages);
     this.readOnly = Boolean(options.readOnly);
     this.insertActions = options.insertActions ?? [];
     this.tableActions = options.tableActions ?? [];
@@ -172,7 +177,7 @@ export class Toolbar {
     this.tableLimits = options.tableLimits;
     this.element.className = 'oh-editor__toolbar';
     this.element.setAttribute('role', 'toolbar');
-    this.element.setAttribute('aria-label', 'Text formatting');
+    this.element.setAttribute('aria-label', this.messages.toolbarLabel);
     this.element.setAttribute('aria-orientation', 'horizontal');
 
     this.renderToolbar(options.fontSizes ?? DEFAULT_FONT_SIZES);
@@ -238,10 +243,11 @@ export class Toolbar {
   }
 
   private renderToolbar(fontSizes: number[]) {
+    const m = this.messages;
     const historyGroup = this.renderGroup(
       [
-        { label: toolbarIcons.undo, title: 'Undo', command: (view) => undo(view.state, view.dispatch) },
-        { label: toolbarIcons.redo, title: 'Redo', command: (view) => redo(view.state, view.dispatch) }
+        { label: toolbarIcons.undo, title: m.undo, command: (view) => undo(view.state, view.dispatch) },
+        { label: toolbarIcons.redo, title: m.redo, command: (view) => redo(view.state, view.dispatch) }
       ],
       'History'
     );
@@ -259,14 +265,14 @@ export class Toolbar {
 
     const marksGroup = this.renderGroup(
       [
-        { label: toolbarIcons.bold, title: 'Bold', command: (view) => run(view, toggleBold()), isActive: (state) => hasMark(state, 'strong') },
-        { label: toolbarIcons.italic, title: 'Italic', command: (view) => run(view, toggleItalic()), isActive: (state) => hasMark(state, 'em') },
-        { label: toolbarIcons.underline, title: 'Underline', command: (view) => run(view, toggleUnderline()), isActive: (state) => hasMark(state, 'underline') },
-        { label: toolbarIcons.strike, title: 'Strikethrough', command: (view) => run(view, toggleStrike()), isActive: (state) => hasMark(state, 'strike') },
-        { label: toolbarIcons.inlineCode, title: 'Inline code', command: (view) => run(view, toggleCode()), isActive: (state) => hasMark(state, 'code') },
+        { label: toolbarIcons.bold, title: m.bold, command: (view) => run(view, toggleBold()), isActive: (state) => hasMark(state, 'strong') },
+        { label: toolbarIcons.italic, title: m.italic, command: (view) => run(view, toggleItalic()), isActive: (state) => hasMark(state, 'em') },
+        { label: toolbarIcons.underline, title: m.underline, command: (view) => run(view, toggleUnderline()), isActive: (state) => hasMark(state, 'underline') },
+        { label: toolbarIcons.strike, title: m.strikethrough, command: (view) => run(view, toggleStrike()), isActive: (state) => hasMark(state, 'strike') },
+        { label: toolbarIcons.inlineCode, title: m.inlineCode, command: (view) => run(view, toggleCode()), isActive: (state) => hasMark(state, 'code') },
         {
           label: toolbarIcons.link,
-          title: 'Insert link',
+          title: m.link,
           role: 'link',
           command: () => this.openLinkEditor(),
           isActive: (state) => hasMark(state, 'link')
@@ -278,11 +284,11 @@ export class Toolbar {
 
     const listBlockGroup = this.renderGroup(
       [
-        { label: toolbarIcons.bulletList, title: 'Bullet list', command: (view) => run(view, toggleBulletList()), isActive: (state) => isBlockActive(state, 'bullet_list') },
-        { label: toolbarIcons.orderedList, title: 'Ordered list', command: (view) => run(view, toggleOrderedList()), isActive: (state) => isBlockActive(state, 'ordered_list') },
-        { label: toolbarIcons.quote, title: 'Blockquote', command: (view) => run(view, toggleBlockquote()), isActive: (state) => isBlockActive(state, 'blockquote') },
-        { label: toolbarIcons.codeBlock, title: 'Code block', command: (view) => run(view, insertCodeBlock()), isActive: (state) => isBlockActive(state, 'code_block') },
-        { label: toolbarIcons.horizontalRule, title: 'Horizontal rule', command: (view) => run(view, insertHR()) }
+        { label: toolbarIcons.bulletList, title: m.bulletList, command: (view) => run(view, toggleBulletList()), isActive: (state) => isBlockActive(state, 'bullet_list') },
+        { label: toolbarIcons.orderedList, title: m.orderedList, command: (view) => run(view, toggleOrderedList()), isActive: (state) => isBlockActive(state, 'ordered_list') },
+        { label: toolbarIcons.quote, title: m.blockquote, command: (view) => run(view, toggleBlockquote()), isActive: (state) => isBlockActive(state, 'blockquote') },
+        { label: toolbarIcons.codeBlock, title: m.codeBlock, command: (view) => run(view, insertCodeBlock()), isActive: (state) => isBlockActive(state, 'code_block') },
+        { label: toolbarIcons.horizontalRule, title: m.horizontalRule, command: (view) => run(view, insertHR()) }
       ],
       'Lists and blocks'
     );
@@ -320,8 +326,8 @@ export class Toolbar {
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6" stroke-dasharray="28" stroke-dashoffset="8" stroke-linecap="round"><animateTransform attributeName="transform" type="rotate" from="0 8 8" to="360 8 8" dur="0.8s" repeatCount="indefinite"/></circle></svg>
       </span>
     `;
-    imageButton.title = 'Upload image';
-    imageButton.setAttribute('aria-label', 'Upload image');
+    imageButton.title = this.messages.insertImage;
+    imageButton.setAttribute('aria-label', this.messages.insertImage);
     imageButton.dataset.role = 'image';
     onPress(imageButton, () => {
       if (this.readOnly || imageButton.disabled || !this.onPickImage) return;
@@ -335,7 +341,7 @@ export class Toolbar {
     });
     this.actions.set(imageButton, {
       label: toolbarIcons.image,
-      title: 'Upload image',
+      title: this.messages.insertImage,
       command: () => true
     });
     insertGroup.append(imageButton);
@@ -344,8 +350,8 @@ export class Toolbar {
     altButton.type = 'button';
     altButton.className = 'oh-editor__button';
     altButton.innerHTML = toolbarIcons.alt;
-    altButton.title = 'Edit image alt text';
-    altButton.setAttribute('aria-label', 'Edit image alt text');
+    altButton.title = this.messages.editImageAlt;
+    altButton.setAttribute('aria-label', this.messages.editImageAlt);
     altButton.dataset.role = 'image-alt';
     onPress(altButton, () => {
       if (this.readOnly || !this.onEditImageAlt || !isImageSelected(this.view.state)) return;
@@ -355,7 +361,7 @@ export class Toolbar {
     });
     this.actions.set(altButton, {
       label: toolbarIcons.alt,
-      title: 'Edit image alt text',
+      title: this.messages.editImageAlt,
       command: () => true
     });
     insertGroup.append(altButton);
@@ -365,7 +371,7 @@ export class Toolbar {
     const hasTableInsert = this.insertActions.length > 0;
 
     for (let i = 0; i < this.insertActions.length; i++) {
-      const action = this.insertActions[i];
+      const action = { ...this.insertActions[i], title: this.actionTitle(this.insertActions[i]) };
 
       if (i === 0 && hasTableInsert) {
         // Table insert → grid picker
@@ -405,7 +411,7 @@ export class Toolbar {
   private openGridPicker(anchor: HTMLElement) {
     this.closeGridPicker();
 
-    this.gridPicker = new TableGridPicker(this.view, this.tableLimits);
+    this.gridPicker = new TableGridPicker(this.view, this.tableLimits, this.messages);
 
     const anchorRect = (this.overflowContainer.contains(anchor) ? this.overflowButton : anchor).getBoundingClientRect();
     const editorRect = this.element.parentElement?.getBoundingClientRect() ?? document.body.getBoundingClientRect();
@@ -431,7 +437,7 @@ export class Toolbar {
     for (const action of this.tableActions) {
       this.appendActionButton(tableGroup, {
         label: action.label,
-        title: action.title,
+        title: this.actionTitle(action),
         command: action.run,
         isEnabled: action.isEnabled,
         isActive: action.isActive
@@ -448,14 +454,9 @@ export class Toolbar {
     group.setAttribute('aria-label', 'Block type');
 
     for (const [value, label] of [
-      ['paragraph', 'Paragraph'],
-      ['h1', 'H1'],
-      ['h2', 'H2'],
-      ['h3', 'H3'],
-      ['h4', 'H4'],
-      ['h5', 'H5'],
-      ['h6', 'H6'],
-      ['code_block', 'Code block']
+      ['paragraph', this.messages.paragraph],
+      ...[1, 2, 3, 4, 5, 6].map((level) => [`h${level}`, formatMessage(this.messages.heading, { level })]),
+      ['code_block', this.messages.codeBlock]
     ]) {
       const option = document.createElement('option');
       option.value = value;
@@ -465,8 +466,8 @@ export class Toolbar {
 
     this.blockSelect.className = 'oh-editor__select';
     this.blockSelect.dataset.selectKind = 'block';
-    this.blockSelect.title = 'Block type';
-    this.blockSelect.setAttribute('aria-label', 'Block type');
+    this.blockSelect.title = this.messages.blockType;
+    this.blockSelect.setAttribute('aria-label', this.messages.blockType);
     this.blockSelect.addEventListener('change', () => {
       if (this.readOnly) return;
       const value = this.blockSelect.value;
@@ -493,7 +494,7 @@ export class Toolbar {
 
     const defaultOption = document.createElement('option');
     defaultOption.value = '';
-    defaultOption.textContent = 'Font size';
+    defaultOption.textContent = this.messages.fontSize;
     this.fontSizeSelect.append(defaultOption);
 
     for (const size of fontSizes) {
@@ -505,8 +506,8 @@ export class Toolbar {
 
     this.fontSizeSelect.className = 'oh-editor__select';
     this.fontSizeSelect.dataset.selectKind = 'font-size';
-    this.fontSizeSelect.title = 'Font size';
-    this.fontSizeSelect.setAttribute('aria-label', 'Font size');
+    this.fontSizeSelect.title = this.messages.fontSize;
+    this.fontSizeSelect.setAttribute('aria-label', this.messages.fontSize);
     this.fontSizeSelect.addEventListener('change', () => {
       if (this.readOnly) return;
       const value = this.fontSizeSelect.value;
@@ -528,14 +529,14 @@ export class Toolbar {
     for (const language of DEFAULT_CODE_LANGUAGES) {
       const option = document.createElement('option');
       option.value = language;
-      option.textContent = language || 'Code lang';
+      option.textContent = language || this.messages.codeLanguagePlaceholder;
       this.codeLanguageSelect.append(option);
     }
 
     this.codeLanguageSelect.className = 'oh-editor__select';
     this.codeLanguageSelect.dataset.selectKind = 'code-language';
-    this.codeLanguageSelect.title = 'Code block language';
-    this.codeLanguageSelect.setAttribute('aria-label', 'Code block language');
+    this.codeLanguageSelect.title = this.messages.codeLanguage;
+    this.codeLanguageSelect.setAttribute('aria-label', this.messages.codeLanguage);
     this.codeLanguageSelect.addEventListener('change', () => {
       if (this.readOnly || !isInCodeBlock(this.view.state)) return;
       run(this.view, setCodeBlockLanguage(this.codeLanguageSelect.value || null));
@@ -592,6 +593,11 @@ export class Toolbar {
     });
     this.actions.set(button, config);
     group.append(button);
+  }
+
+  private actionTitle(action: EditorToolbarAction) {
+    const translated = action.id ? (this.messages as unknown as Record<string, string | undefined>)[action.id] : undefined;
+    return translated ?? action.title;
   }
 
   private openLinkEditor() {
@@ -655,8 +661,8 @@ export class Toolbar {
     this.overflowButton.type = 'button';
     this.overflowButton.className = 'oh-editor__button oh-editor__toolbar-overflow-button';
     this.overflowButton.innerHTML = '&#8942;';
-    this.overflowButton.title = 'More';
-    this.overflowButton.setAttribute('aria-label', 'More');
+    this.overflowButton.title = this.messages.more;
+    this.overflowButton.setAttribute('aria-label', this.messages.more);
     this.overflowButton.setAttribute('aria-haspopup', 'true');
     this.overflowButton.setAttribute('aria-expanded', 'false');
     this.overflowButton.setAttribute('aria-controls', overflowId);
@@ -665,7 +671,7 @@ export class Toolbar {
 
     this.overflowGroup.className = 'oh-editor__toolbar-group oh-editor__toolbar-group--overflow';
     this.overflowGroup.setAttribute('role', 'group');
-    this.overflowGroup.setAttribute('aria-label', 'More actions');
+    this.overflowGroup.setAttribute('aria-label', this.messages.moreActions);
     this.overflowGroup.append(this.overflowButton, this.overflowContainer);
     this.element.append(this.overflowGroup);
 

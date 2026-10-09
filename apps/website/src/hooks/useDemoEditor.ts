@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { createEditor, type Editor } from '@oh-new-editor/core';
+import { createEditor, messagesKo, messagesZhCN, type Editor, type EditorMessages } from '@oh-new-editor/core';
 import { createMarkdownSupport } from '@oh-new-editor/core/markdown';
 import { createNotionSupport } from '@oh-new-editor/core/notion';
 import { createTableSupport } from '@oh-new-editor/core/table';
@@ -17,24 +17,33 @@ const initialContent = `
 }</code></pre>
 `;
 
-export function useDemoEditor(hostRef: React.RefObject<HTMLElement | null>) {
+function messagesFor(language: string): Partial<EditorMessages> | undefined {
+  if (language.startsWith('ko')) return messagesKo;
+  if (language.startsWith('zh')) return messagesZhCN;
+  return undefined;
+}
+
+export function useDemoEditor(
+  hostRef: React.RefObject<HTMLElement | null>,
+  { mode, language, placeholder }: { mode: DemoMode; language: string; placeholder: string },
+) {
   const editorRef = useRef<Editor | null>(null);
+  const contentRef = useRef(initialContent);
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
   const [markdownContent, setMarkdownContent] = useState('');
 
-  const updateMarkdown = useCallback((editor: Editor) => {
-    setMarkdownContent(editor.getContent('markdown'));
-  }, []);
-
-  // Initialize editor once
+  // (Re)create the editor when the UI language changes, keeping the content.
   useEffect(() => {
     const host = hostRef.current;
-    if (!host || editorRef.current) return;
+    if (!host) return;
 
-    const config = {
+    const editor = createEditor(host, {
       table: createTableSupport({ maxRows: 12, maxCols: 8 }),
       markdown: createMarkdownSupport(),
-      placeholder: 'Start typing…',
-      initialContent,
+      placeholder,
+      initialContent: contentRef.current,
+      messages: messagesFor(language),
       image: {
         upload: async (file: File) => {
           await new Promise((resolve) => window.setTimeout(resolve, 500));
@@ -45,26 +54,26 @@ export function useDemoEditor(hostRef: React.RefObject<HTMLElement | null>) {
         toolbar: createToolbarSupport(),
         notion: createNotionSupport(),
       },
-    };
-
-    const editor = createEditor(host, config);
+      style: modeRef.current,
+    });
     editorRef.current = editor;
 
-    editor.on('change', () => {
-      updateMarkdown(editor);
-    });
-
-    // Initial markdown
-    updateMarkdown(editor);
+    const update = () => {
+      contentRef.current = editor.getContent('html');
+      setMarkdownContent(editor.getContent('markdown'));
+    };
+    editor.on('change', update);
+    update();
 
     return () => {
+      contentRef.current = editor.getContent('html');
       editor.destroy();
       editorRef.current = null;
     };
-  }, [hostRef, updateMarkdown]);
+  }, [hostRef, language, placeholder]);
 
-  const setStyle = useCallback((mode: DemoMode) => {
-    editorRef.current?.setStyle(mode);
+  const setStyle = useCallback((nextMode: DemoMode) => {
+    editorRef.current?.setStyle(nextMode);
   }, []);
 
   return { markdownContent, setStyle };

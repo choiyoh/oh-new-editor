@@ -13,6 +13,7 @@ import {
 } from 'prosemirror-tables';
 import type { EditorState } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
+import { DEFAULT_MESSAGES, type EditorMessages } from '../../i18n';
 import { onPress } from '../dom';
 import { toolbarIcons } from '../icons';
 
@@ -43,21 +44,22 @@ export class TableMenu {
   private isOpen = false;
   private readonly actions: TableMenuAction[];
 
-  constructor(private readonly view: EditorView, maxRows?: number, maxCols?: number) {
+  constructor(private readonly view: EditorView, maxRows?: number, maxCols?: number, messages: EditorMessages = DEFAULT_MESSAGES) {
+    const m = messages;
     this.actions = [
-      { label: 'Add row above', icon: toolbarIcons.addRow, command: withLimit(addRowBefore, 'rows', maxRows) },
-      { label: 'Add row below', icon: toolbarIcons.addRow, command: withLimit(addRowAfter, 'rows', maxRows) },
-      { label: 'Add column left', icon: toolbarIcons.addColumn, command: withLimit(addColumnBefore, 'cols', maxCols) },
-      { label: 'Add column right', icon: toolbarIcons.addColumn, command: withLimit(addColumnAfter, 'cols', maxCols) },
-      { label: 'Delete row', icon: toolbarIcons.removeRow, command: deleteRow },
-      { label: 'Delete column', icon: toolbarIcons.removeColumn, command: deleteColumn },
-      { label: 'Merge cells', icon: toolbarIcons.merge, command: mergeCells },
-      { label: 'Split cell', icon: toolbarIcons.split, command: splitCell }
+      { label: m.addRowAbove, icon: toolbarIcons.addRow, command: withLimit(addRowBefore, 'rows', maxRows) },
+      { label: m.addRowBelow, icon: toolbarIcons.addRow, command: withLimit(addRowAfter, 'rows', maxRows) },
+      { label: m.addColumnLeft, icon: toolbarIcons.addColumn, command: withLimit(addColumnBefore, 'cols', maxCols) },
+      { label: m.addColumnRight, icon: toolbarIcons.addColumn, command: withLimit(addColumnAfter, 'cols', maxCols) },
+      { label: m.deleteRow, icon: toolbarIcons.removeRow, command: deleteRow },
+      { label: m.deleteColumn, icon: toolbarIcons.removeColumn, command: deleteColumn },
+      { label: m.mergeCells, icon: toolbarIcons.merge, command: mergeCells },
+      { label: m.splitCell, icon: toolbarIcons.split, command: splitCell }
     ];
     this.element.className = 'oh-editor__table-menu';
     this.element.hidden = true;
     this.element.setAttribute('role', 'menu');
-    this.element.setAttribute('aria-label', 'Table');
+    this.element.setAttribute('aria-label', m.tableMenu);
     this.render();
     document.addEventListener('keydown', this.handleKeyDown, true);
     document.addEventListener('mousedown', this.handleClickOutside, true);

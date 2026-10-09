@@ -12,7 +12,8 @@ export function createNotionSupport(): EditorToolbarSupport {
         onPickImage: options.onPickImage,
         onEditImageAlt: options.onEditImageAlt,
         insertActions: options.insertActions,
-        tableLimits: options.tableLimits
+        tableLimits: options.tableLimits,
+        messages: options.messages
       });
     }
   };

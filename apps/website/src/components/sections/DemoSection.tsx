@@ -11,7 +11,7 @@ type DemoMode = 'toolbar' | 'notion';
 type DemoTheme = 'light' | 'dark';
 
 export function DemoSection() {
-  const { t } = useTranslation('demo');
+  const { t, i18n } = useTranslation('demo');
   const [mode, setMode] = useState<DemoMode>('toolbar');
   // Follows the site theme until the visitor picks one for the demo.
   const siteDark = useSiteTheme();
@@ -19,7 +19,11 @@ export function DemoSection() {
   const demoTheme: DemoTheme = themeOverride ?? (siteDark ? 'dark' : 'light');
 
   const hostRef = useRef<HTMLDivElement>(null);
-  const { markdownContent, setStyle } = useDemoEditor(hostRef);
+  const { markdownContent, setStyle } = useDemoEditor(hostRef, {
+    mode,
+    language: i18n.resolvedLanguage ?? i18n.language,
+    placeholder: t('placeholder'),
+  });
 
   // Sync mode changes to editor
   useEffect(() => {
