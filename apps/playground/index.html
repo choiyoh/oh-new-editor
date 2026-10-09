@@ -4,13 +4,35 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232563eb'/%3E%3Cpath d='M20 18h24c6.627 0 12 5.373 12 12v4c0 6.627-5.373 12-12 12H20V18Zm8 10v8h14a4 4 0 0 0 0-8H28Z' fill='white'/%3E%3C/svg%3E" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <title>Oh New Editor — Rich Text Editor Toolkit</title>
+    <title>Oh New Editor — Playground</title>
   </head>
   <body>
-    <div id="app"></div>
+    <header class="bar">
+      <strong>Oh New Editor playground</strong>
+      <label>Mode
+        <select id="mode">
+          <option value="toolbar">Toolbar</option>
+          <option value="notion">Notion</option>
+        </select>
+      </label>
+      <label>Output
+        <select id="output-format">
+          <option value="markdown">Markdown</option>
+          <option value="html">HTML</option>
+        </select>
+      </label>
+      <label><input id="read-only" type="checkbox" /> Read-only</label>
+      <label><input id="dark" type="checkbox" /> Dark</label>
+    </header>
+    <main class="layout">
+      <div id="editor"></div>
+      <aside class="panel">
+        <h2>Output</h2>
+        <pre id="output"></pre>
+        <h2>Events</h2>
+        <pre id="events" aria-live="off"></pre>
+      </aside>
+    </main>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

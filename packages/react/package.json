@@ -11,12 +11,12 @@
   "types": "./dist/index.d.ts",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yohan/oh-new-editor.git",
+    "url": "https://github.com/choiyoh/oh-new-editor.git",
     "directory": "packages/react"
   },
-  "homepage": "https://github.com/yohan/oh-new-editor",
+  "homepage": "https://github.com/choiyoh/oh-new-editor#readme",
   "bugs": {
-    "url": "https://github.com/yohan/oh-new-editor/issues"
+    "url": "https://github.com/choiyoh/oh-new-editor/issues"
   },
   "publishConfig": {
     "access": "public"
@@ -35,14 +35,12 @@
     "typecheck": "tsc --project tsconfig.json --noEmit"
   },
   "peerDependencies": {
-    "@oh-new-editor/core": "workspace:*",
+    "@oh-new-editor/core": "workspace:^",
     "react": ">=18",
     "react-dom": ">=18"
   },
-  "dependencies": {
-    "@oh-new-editor/core": "workspace:*"
-  },
   "devDependencies": {
+    "@oh-new-editor/core": "workspace:*",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/react": "^19.2.2",
@@ -53,5 +51,13 @@
     "vite": "^7.1.9",
     "vite-plugin-dts": "^4.5.4",
     "vitest": "^3.2.4"
-  }
+  },
+  "author": "choiyoh",
+  "keywords": [
+    "editor",
+    "rich-text",
+    "wysiwyg",
+    "prosemirror",
+    "react"
+  ]
 }

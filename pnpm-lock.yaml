@@ -136,11 +136,10 @@ importers:
         version: 3.2.4(@types/node@25.5.0)(jiti@2.7.0)(jsdom@26.1.0)(lightningcss@1.32.0)
 
   packages/react:
-    dependencies:
+    devDependencies:
       '@oh-new-editor/core':
         specifier: workspace:*
         version: link:../core
-    devDependencies:
       '@testing-library/jest-dom':
         specifier: ^6.9.1
         version: 6.9.1
@@ -173,11 +172,10 @@ importers:
         version: 3.2.4(@types/node@25.5.0)(jiti@2.7.0)(jsdom@26.1.0)(lightningcss@1.32.0)
 
   packages/svelte:
-    dependencies:
+    devDependencies:
       '@oh-new-editor/core':
         specifier: workspace:*
         version: link:../core
-    devDependencies:
       '@sveltejs/vite-plugin-svelte':
         specifier: ^6.2.1
         version: 6.2.4(svelte@5.55.1)(vite@7.3.1(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0))
@@ -204,11 +202,10 @@ importers:
         version: 3.2.4(@types/node@25.5.0)(jiti@2.7.0)(jsdom@26.1.0)(lightningcss@1.32.0)
 
   packages/vue:
-    dependencies:
+    devDependencies:
       '@oh-new-editor/core':
         specifier: workspace:*
         version: link:../core
-    devDependencies:
       '@vue/test-utils':
         specifier: ^2.4.11
         version: 2.4.11(@vue/compiler-dom@3.5.32)(@vue/server-renderer@3.5.32(vue@3.5.32(typescript@6.0.2)))(vue@3.5.32(typescript@6.0.2))
