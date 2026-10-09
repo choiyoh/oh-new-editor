@@ -48,6 +48,9 @@ i18n
       },
     },
     fallbackLng: 'en',
+    // Map browser locales like ko-KR onto the bundled languages.
+    supportedLngs: ['en', 'ko', 'zh-CN'],
+    nonExplicitSupportedLngs: true,
     defaultNS: 'common',
     interpolation: {
       escapeValue: false,
@@ -57,5 +60,18 @@ i18n
       caches: ['localStorage'],
     },
   });
+
+// Keep <html lang>, the title and the description in sync with the language.
+function syncDocumentLanguage(lng: string) {
+  document.documentElement.lang = lng;
+  if (!window.location.pathname.startsWith('/docs')) {
+    document.title = i18n.t('meta.title', { ns: 'common' });
+  }
+  document.querySelector('meta[name="description"]')?.setAttribute('content', i18n.t('meta.description', { ns: 'common' }));
+}
+
+i18n.on('languageChanged', syncDocumentLanguage);
+if (i18n.isInitialized) syncDocumentLanguage(i18n.language);
+else i18n.on('initialized', () => syncDocumentLanguage(i18n.language));
 
 export default i18n;

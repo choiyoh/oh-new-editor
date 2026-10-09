@@ -1,15 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { cn, navigate } from '../../lib/utils';
+import { usePathname } from '../../hooks/usePathname';
+import { cn, handleSiteLinkClick, navigate, prefersReducedMotion } from '../../lib/utils';
 import { Button } from '../ui/Button';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import { ThemeToggle } from './ThemeToggle';
-
-const stats = [
-  { key: 'stars', value: '2.4k+' },
-  { key: 'downloads', value: '180k+' },
-  { key: 'frameworks', value: '3' },
-];
 
 const menuIcon = (
   <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -35,23 +30,25 @@ const closeIcon = (
 
 export function Nav() {
   const { t } = useTranslation('common');
-  const { t: heroT } = useTranslation('hero');
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [currentPath, setCurrentPath] = useState(window.location.pathname);
+  const currentPath = usePathname();
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
-    const handleLocationChange = () => setCurrentPath(window.location.pathname);
-
-    window.addEventListener('scroll', handleScroll);
-    window.addEventListener('popstate', handleLocationChange);
-
-    return () => {
-      window.removeEventListener('scroll', handleScroll);
-      window.removeEventListener('popstate', handleLocationChange);
-    };
+    handleScroll();
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMobileOpen(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [mobileOpen]);
 
   const navLinks = [
     { label: t('nav.features'), href: '#features' },
@@ -60,22 +57,7 @@ export function Nav() {
     { label: t('nav.docs'), href: '/docs' },
   ];
 
-  const handleLinkClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
-    if (href.startsWith('/')) {
-      e.preventDefault();
-      navigate(href);
-      return;
-    }
-
-    if (currentPath.startsWith('/docs')) {
-      e.preventDefault();
-      navigate('/' + href);
-      setTimeout(() => {
-        const el = document.querySelector(href);
-        if (el) el.scrollIntoView({ behavior: 'smooth' });
-      }, 100);
-    }
-  };
+  const handleLinkClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => handleSiteLinkClick(e, href);
 
   return (
     <>
@@ -93,7 +75,7 @@ export function Nav() {
             onClick={(e) => {
               e.preventDefault();
               navigate('/');
-              window.scrollTo({ top: 0, behavior: 'smooth' });
+              window.scrollTo({ top: 0, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
             }}
             className="font-display text-xl font-bold text-zinc-900 dark:text-zinc-100"
           >
@@ -102,11 +84,12 @@ export function Nav() {
 
           <nav className="hidden items-center gap-8 md:flex">
             {navLinks.map((link) => {
-              const isActive = link.href === '/docs' ? currentPath.startsWith('/docs') : false;
+              const isActive = link.href === '/docs' && currentPath.startsWith('/docs');
               return (
                 <a
                   key={link.href}
                   href={link.href}
+                  aria-current={isActive ? 'page' : undefined}
                   onClick={(e) => handleLinkClick(e, link.href)}
                   className={cn(
                     "text-sm font-medium transition-colors hover:text-brand-600 dark:hover:text-brand-400",
@@ -139,16 +122,18 @@ export function Nav() {
             onClick={() => setMobileOpen(!mobileOpen)}
             className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-zinc-700 dark:text-zinc-300 md:hidden"
             aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={mobileOpen}
+            aria-controls="mobile-nav"
           >
             {mobileOpen ? closeIcon : menuIcon}
           </button>
         </div>
 
         {mobileOpen && (
-          <div className="border-t border-zinc-200 bg-white px-4 py-4 dark:border-zinc-800 dark:bg-[#09090b] md:hidden">
+          <div id="mobile-nav" className="border-t border-zinc-200 bg-white px-4 py-4 dark:border-zinc-800 dark:bg-[#09090b] md:hidden">
             <nav className="flex flex-col gap-3">
               {navLinks.map((link) => {
-                const isActive = link.href === '/docs' ? currentPath.startsWith('/docs') : false;
+                const isActive = link.href === '/docs' && currentPath.startsWith('/docs');
                 return (
                   <a
                     key={link.href}

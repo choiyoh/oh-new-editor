@@ -4,7 +4,7 @@
   "items": {
     "core": {
       "title": "@oh-new-editor/core",
-      "description": "엔진. ProseMirror 기반 에디터. 스키마, 커맨드, 플러그인, HTML/JSON 입출력.",
+      "description": "엔진. 스키마, 명령, 플러그인, 정제된 HTML 입출력을 갖춘 ProseMirror 기반 에디터.",
       "badge": "기본"
     },
     "toolbar": {
@@ -14,12 +14,12 @@
     },
     "notion": {
       "title": "Notion UI",
-      "description": "슬래시 커맨드와 드래그 핸들을 갖춘 Notion 스타일의 블록 기반 인터페이스.",
+      "description": "슬래시 명령과 버블 서식 툴바를 갖춘 노션 스타일 인터페이스.",
       "badge": "UI"
     },
     "table": {
       "title": "테이블 지원",
-      "description": "열 크기 조절, 행/열 추가·삭제, 헤더 토글을 포함한 완전한 테이블 편집.",
+      "description": "열 크기 조절, 행/열 조작, 병합/분할, 크기 제한을 지원하는 표 편집.",
       "badge": "플러그인"
     },
     "markdown": {

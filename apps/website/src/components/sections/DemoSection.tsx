@@ -4,7 +4,8 @@ import { AnimatedSection } from '../AnimatedSection';
 import { Button } from '../ui/Button';
 import { SectionTitle } from '../ui/SectionTitle';
 import { useDemoEditor } from '../../hooks/useDemoEditor';
-import { cn } from '../../lib/utils';
+import { useSiteTheme } from '../../hooks/useSiteTheme';
+import { cn, handleSiteLinkClick } from '../../lib/utils';
 
 type DemoMode = 'toolbar' | 'notion';
 type DemoTheme = 'light' | 'dark';
@@ -12,7 +13,10 @@ type DemoTheme = 'light' | 'dark';
 export function DemoSection() {
   const { t } = useTranslation('demo');
   const [mode, setMode] = useState<DemoMode>('toolbar');
-  const [demoTheme, setDemoTheme] = useState<DemoTheme>('light');
+  // Follows the site theme until the visitor picks one for the demo.
+  const siteDark = useSiteTheme();
+  const [themeOverride, setDemoTheme] = useState<DemoTheme | null>(null);
+  const demoTheme: DemoTheme = themeOverride ?? (siteDark ? 'dark' : 'light');
 
   const hostRef = useRef<HTMLDivElement>(null);
   const { markdownContent, setStyle } = useDemoEditor(hostRef);
@@ -21,16 +25,6 @@ export function DemoSection() {
   useEffect(() => {
     setStyle(mode);
   }, [mode, setStyle]);
-
-  // Sync demo theme to data-theme attribute
-  useEffect(() => {
-    const host = hostRef.current;
-    if (!host) return;
-    const container = host.closest('[data-demo-container]');
-    if (container) {
-      (container as HTMLElement).dataset.theme = demoTheme;
-    }
-  }, [demoTheme]);
 
   const handleModeChange = useCallback((nextMode: DemoMode) => {
     setMode(nextMode);
@@ -49,10 +43,10 @@ export function DemoSection() {
           <div className="lg:col-span-2">
             <div className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
               <div className="mb-4">
-                <label className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-500">
+                <span id="demo-mode-label" className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
                   {t('modeLabel')}
-                </label>
-                <div className="mt-2 flex flex-col gap-2">
+                </span>
+                <div className="mt-2 flex flex-col gap-2" role="group" aria-labelledby="demo-mode-label">
                   <DemoToggleButton
                     active={mode === 'toolbar'}
                     onClick={() => handleModeChange('toolbar')}
@@ -69,10 +63,10 @@ export function DemoSection() {
               </div>
 
               <div>
-                <label className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-500">
+                <span id="demo-theme-label" className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
                   {t('themeLabel')}
-                </label>
-                <div className="mt-2 flex flex-col gap-2">
+                </span>
+                <div className="mt-2 flex flex-col gap-2" role="group" aria-labelledby="demo-theme-label">
                   <DemoToggleButton
                     active={demoTheme === 'light'}
                     onClick={() => setDemoTheme('light')}
@@ -92,22 +86,9 @@ export function DemoSection() {
 
           {/* Editor */}
           <div className="lg:col-span-6">
-            <div
-              data-demo-container
-              className={cn(
-                'overflow-hidden rounded-2xl border border-zinc-200 shadow-sm dark:border-zinc-800',
-                demoTheme === 'dark'
-                  ? 'bg-zinc-900 text-zinc-100'
-                  : 'bg-white text-zinc-900',
-              )}
-            >
-              <div className="border-b border-zinc-200 px-4 py-2 text-xs font-medium text-zinc-500 dark:border-zinc-800 dark:text-zinc-500">
-                {mode === 'toolbar' ? t('modes.toolbar') : t('modes.notion')}
-              </div>
-              <div
-                ref={hostRef}
-                className="min-h-[320px] p-4"
-              />
+            {/* No overflow clipping here: menus and popovers extend past the editor. */}
+            <div data-demo-container data-theme={demoTheme} className="rounded-2xl">
+              <div ref={hostRef} className="min-h-[320px]" aria-label={t('title')} />
             </div>
           </div>
 
@@ -125,8 +106,13 @@ export function DemoSection() {
         </div>
 
         <div className="mt-8 text-center">
-          <Button as="a" href="/playground" variant="secondary">
-            {t('tryPlayground')}
+          <Button
+            as="a"
+            href="/docs"
+            variant="secondary"
+            onClick={(event: React.MouseEvent<HTMLAnchorElement>) => handleSiteLinkClick(event, '/docs')}
+          >
+            {t('readDocs')}
           </Button>
         </div>
       </div>
@@ -146,6 +132,7 @@ function DemoToggleButton({
   return (
     <button
       type="button"
+      aria-pressed={active}
       onClick={onClick}
       className={cn(
         'rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors',

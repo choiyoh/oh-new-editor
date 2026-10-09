@@ -6,8 +6,10 @@
   "primaryCta": "开始使用",
   "secondaryCta": "在 GitHub 上查看",
   "stats": {
-    "stars": "GitHub 星标",
-    "downloads": "npm 下载量",
-    "frameworks": "支持框架"
-  }
+    "modules": "可选模块",
+    "frameworks": "框架适配器",
+    "license": "开源许可证"
+  },
+  "cardDemo": "试用演示",
+  "cardDocs": "阅读文档"
 }

@@ -4,7 +4,7 @@
   "items": {
     "core": {
       "title": "@oh-new-editor/core",
-      "description": "The engine. ProseMirror-powered editor with schema, commands, plugins, and HTML/JSON I/O.",
+      "description": "The engine. ProseMirror-powered editor with schema, commands, plugins, and sanitized HTML I/O.",
       "badge": "Base"
     },
     "toolbar": {
@@ -14,12 +14,12 @@
     },
     "notion": {
       "title": "Notion UI",
-      "description": "Notion-inspired block-based interface with slash commands and drag handles.",
+      "description": "Notion-inspired interface with slash commands and a bubble formatting toolbar.",
       "badge": "UI"
     },
     "table": {
       "title": "Table Support",
-      "description": "Full table editing with column resize, add/delete rows and columns, and header toggles.",
+      "description": "Table editing with column resize, row/column operations, merge/split, and size limits.",
       "badge": "Plugin"
     },
     "markdown": {

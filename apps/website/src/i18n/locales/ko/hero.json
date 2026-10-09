@@ -6,8 +6,10 @@
   "primaryCta": "시작하기",
   "secondaryCta": "GitHub에서 보기",
   "stats": {
-    "stars": "GitHub 스타",
-    "downloads": "npm 다운로드",
-    "frameworks": "지원 프레임워크"
-  }
+    "modules": "선택형 모듈",
+    "frameworks": "프레임워크 어댑터",
+    "license": "오픈소스 라이선스"
+  },
+  "cardDemo": "데모 써보기",
+  "cardDocs": "문서 보기"
 }

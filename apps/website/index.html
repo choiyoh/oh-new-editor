@@ -11,6 +11,16 @@
     <meta name="description" content="A headless, framework-agnostic rich text editor toolkit. Build AI-native editors faster with production-ready tools." />
   </head>
   <body class="antialiased">
+    <script>
+      // Apply the saved/system theme before first paint to avoid a light flash.
+      (function () {
+        try {
+          var stored = localStorage.getItem('theme');
+          var dark = stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+          if (dark) document.documentElement.classList.add('dark');
+        } catch (e) {}
+      })();
+    </script>
     <div id="app"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

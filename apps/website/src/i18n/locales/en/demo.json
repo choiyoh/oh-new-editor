@@ -1,7 +1,6 @@
 {
   "title": "See It in Action",
   "subtitle": "Try the editor right here. Switch between toolbar and Notion-style modes, toggle themes, and see live Markdown output.",
-  "tryPlayground": "Open Full Playground →",
   "modeLabel": "Mode",
   "themeLabel": "Theme",
   "modes": {
@@ -13,5 +12,6 @@
     "dark": "Dark"
   },
   "previewLabel": "Markdown Preview",
-  "placeholder": "Start typing here... Use / for slash commands or select text for formatting."
+  "placeholder": "Start typing here... Use / for slash commands or select text for formatting.",
+  "readDocs": "Read the Docs →"
 }

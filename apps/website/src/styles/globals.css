@@ -25,6 +25,12 @@
     scroll-behavior: smooth;
   }
 
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+
   body {
     @apply bg-white text-zinc-900 dark:bg-[#09090b] dark:text-zinc-100;
     font-family: var(--font-sans);

@@ -8,8 +8,8 @@ const languages = [
 ];
 
 export function LanguageSwitcher() {
-  const { i18n } = useTranslation('common');
-  const current = i18n.language;
+  const { i18n, t } = useTranslation('common');
+  const current = i18n.resolvedLanguage ?? i18n.language;
 
   return (
     <div className="flex items-center gap-1 rounded-full border border-zinc-200 bg-white p-1 dark:border-zinc-800 dark:bg-zinc-900">
@@ -24,7 +24,9 @@ export function LanguageSwitcher() {
               ? 'bg-brand-600 text-white'
               : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800',
           )}
-          aria-label={lang.label}
+          lang={lang.code}
+          aria-label={t(`languageSwitcher.${lang.code}`)}
+          aria-pressed={current === lang.code}
         >
           {lang.label}
         </button>

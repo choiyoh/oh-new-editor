@@ -4,7 +4,7 @@
   "items": {
     "core": {
       "title": "@oh-new-editor/core",
-      "description": "引擎。基于 ProseMirror 的编辑器，包含模式、命令、插件和 HTML/JSON I/O。",
+      "description": "引擎。基于 ProseMirror，提供 schema、命令、插件以及经过清洗的 HTML 输入输出。",
       "badge": "基础"
     },
     "toolbar": {
@@ -14,12 +14,12 @@
     },
     "notion": {
       "title": "Notion UI",
-      "description": "受 Notion 启发的基于块的界面，包含斜杠命令和拖拽手柄。",
+      "description": "带斜杠命令和气泡格式工具栏的 Notion 风格界面。",
       "badge": "UI"
     },
     "table": {
       "title": "表格支持",
-      "description": "完整的表格编辑，包含列宽调整、行/列添加删除和标题切换。",
+      "description": "表格编辑：列宽调整、行/列操作、合并/拆分以及尺寸限制。",
       "badge": "插件"
     },
     "markdown": {

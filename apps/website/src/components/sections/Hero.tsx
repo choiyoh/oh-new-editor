@@ -1,11 +1,14 @@
 import { useTranslation } from 'react-i18next';
 import { AnimatedSection } from '../AnimatedSection';
+import { handleSiteLinkClick } from '../../lib/utils';
+import { REPO_URL } from '../../lib/site';
 import { Button } from '../ui/Button';
 
+// Facts that follow from the codebase, not vanity numbers.
 const stats = [
-  { key: 'stars', value: '2.4k+' },
-  { key: 'downloads', value: '180k+' },
+  { key: 'modules', value: '5' },
   { key: 'frameworks', value: '3' },
+  { key: 'license', value: 'MIT' },
 ];
 
 export function Hero() {
@@ -46,7 +49,9 @@ export function Hero() {
               </Button>
               <Button
                 as="a"
-                href="https://github.com"
+                href={REPO_URL}
+                target="_blank"
+                rel="noreferrer"
                 variant="secondary"
                 size="lg"
               >
@@ -77,48 +82,42 @@ export function Hero() {
                   <div className="h-3 w-3 rounded-full bg-emerald-400/80" />
                 </div>
                 <div className="rounded-md bg-zinc-100 px-2 py-0.5 text-[10px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-                  editor.tsx
+                  editor.ts
                 </div>
               </div>
               
-              <div className="mt-6 space-y-3.5 font-mono text-xs text-zinc-600 dark:text-zinc-400">
-                <div className="flex gap-2">
-                  <span className="text-zinc-400 dark:text-zinc-600">1</span>
-                  <span className="text-brand-600 dark:text-brand-400">const</span>
-                  <span className="text-indigo-600 dark:text-indigo-300">editor</span>
-                  <span className="text-zinc-500">=</span>
+              <pre className="mt-6 overflow-x-auto font-mono text-xs leading-6 text-zinc-600 dark:text-zinc-400" aria-label="Example code">
+                <code>
+                  <span className="text-brand-600 dark:text-brand-400">import</span>{' { createEditor } '}
+                  <span className="text-brand-600 dark:text-brand-400">from</span>{' '}
+                  <span className="text-teal-600 dark:text-teal-400">'@oh-new-editor/core'</span>;{'\n'}
+                  <span className="text-brand-600 dark:text-brand-400">import</span>{' { createNotionSupport } '}
+                  <span className="text-brand-600 dark:text-brand-400">from</span>{' '}
+                  <span className="text-teal-600 dark:text-teal-400">'@oh-new-editor/core/notion'</span>;{'\n\n'}
+                  <span className="text-brand-600 dark:text-brand-400">const</span>{' editor = '}
                   <span className="text-emerald-600 dark:text-emerald-400">createEditor</span>
-                  <span className="text-zinc-500">()</span>
-                </div>
-                <div className="flex gap-2">
-                  <span className="text-zinc-400 dark:text-zinc-600">2</span>
-                  <span className="text-zinc-500">editor.</span>
-                  <span className="text-amber-600 dark:text-amber-400">use</span>
-                  <span className="text-zinc-500">(</span>
-                  <span className="text-violet-600 dark:text-violet-400">markdown</span>
-                  <span className="text-zinc-500">)</span>
-                </div>
-                <div className="flex gap-2 pl-4">
-                  <span className="text-zinc-400 dark:text-zinc-600">3</span>
-                  <span className="text-zinc-400 dark:text-zinc-600">// Notion-style slash ready</span>
-                </div>
-                <div className="flex gap-2">
-                  <span className="text-zinc-400 dark:text-zinc-600">4</span>
-                  <span className="text-zinc-500">editor.</span>
-                  <span className="text-amber-600 dark:text-amber-400">render</span>
-                  <span className="text-zinc-500">(</span>
-                  <span className="text-teal-600 dark:text-teal-400">"#app"</span>
-                  <span className="text-zinc-500">)</span>
-                </div>
-              </div>
+                  {'(el, {\n  toolbar: '}
+                  <span className="text-emerald-600 dark:text-emerald-400">createNotionSupport</span>
+                  {'(),\n  placeholder: '}
+                  <span className="text-teal-600 dark:text-teal-400">'Type / for commands'</span>
+                  {'\n});'}
+                </code>
+              </pre>
 
               <div className="mt-8 flex gap-2">
-                <div className="h-8 flex-1 rounded-lg bg-brand-500/10 hover:bg-brand-500/20 text-brand-600 dark:text-brand-400 flex items-center justify-center text-xs font-semibold transition-colors cursor-pointer">
-                  Run Demo
-                </div>
-                <div className="h-8 flex-1 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 flex items-center justify-center text-xs font-semibold transition-colors cursor-pointer">
-                  View Code
-                </div>
+                <a
+                  href="#demo"
+                  className="flex h-8 flex-1 items-center justify-center rounded-lg bg-brand-500/10 text-xs font-semibold text-brand-600 transition-colors hover:bg-brand-500/20 dark:text-brand-400"
+                >
+                  {t('cardDemo')}
+                </a>
+                <a
+                  href="/docs"
+                  onClick={(event) => handleSiteLinkClick(event, '/docs')}
+                  className="flex h-8 flex-1 items-center justify-center rounded-lg bg-zinc-100 text-xs font-semibold text-zinc-600 transition-colors hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                >
+                  {t('cardDocs')}
+                </a>
               </div>
             </div>
           </div>
