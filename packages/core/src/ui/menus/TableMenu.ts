@@ -60,12 +60,16 @@ export class TableMenu {
     document.addEventListener('mousedown', this.handleClickOutside, true);
   }
 
+  /** `left`/`top` are relative to the menu's offset parent (the editor host). */
   open(left: number, top: number) {
     this.element.hidden = false;
-    this.element.style.left = `${left}px`;
-    this.element.style.top = `${top}px`;
     this.isOpen = true;
     this.sync();
+
+    const parent = this.element.offsetParent ?? this.element.parentElement;
+    const maxLeft = parent ? Math.max(4, parent.clientWidth - this.element.offsetWidth - 4) : left;
+    this.element.style.left = `${Math.min(Math.max(4, left), maxLeft)}px`;
+    this.element.style.top = `${Math.max(4, top)}px`;
   }
 
   close() {

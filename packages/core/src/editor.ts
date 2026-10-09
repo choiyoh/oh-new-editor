@@ -1,4 +1,4 @@
-import { EditorState, NodeSelection, Plugin } from 'prosemirror-state';
+import { EditorState, NodeSelection, Plugin, TextSelection } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 
 import { parseHtml } from './parsers/html';
@@ -30,13 +30,13 @@ function createEventStore() {
   );
 }
 
-function createPlugins(options: EditorOptions) {
+function createPlugins(options: EditorOptions, schema: EditorSchema) {
   return [
     createHistoryPlugin(),
-    createInputRulesPlugin(),
+    createInputRulesPlugin(schema),
     createImageUploadPlugin(options.image),
     createPastePlugin(options.table),
-    createKeymapPlugin(),
+    createKeymapPlugin(schema),
     createBaseKeymapPlugin(),
     ...(options.table?.plugins ?? []),
     ...(options.plugins ?? []),
@@ -73,7 +73,7 @@ class ProseMirrorEditor implements Editor {
     this.schema = options.schema ?? options.table?.schema ?? editorSchema;
     this.content = document.createElement('div');
     this.content.className = 'oh-editor__content';
-    this.plugins = createPlugins(options);
+    this.plugins = createPlugins(options, this.schema);
     this.host.classList.add('oh-editor');
     this.host.replaceChildren();
     this.outputFormat = options.outputFormat ?? DEFAULT_OUTPUT_FORMAT;
@@ -323,8 +323,15 @@ class ProseMirrorEditor implements Editor {
           }
 
           event.preventDefault();
-          view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, coords.pos)));
-          this.menuController.open(event.clientX, event.clientY);
+          // Keep an existing (cell) selection that already covers the clicked
+          // position so "Merge cells" stays available; otherwise move the
+          // cursor into the clicked cell.
+          const { from, to } = view.state.selection;
+          if (coords.pos < from || coords.pos > to) {
+            view.dispatch(view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(coords.pos))));
+          }
+          const hostRect = this.host.getBoundingClientRect();
+          this.menuController.open(event.clientX - hostRect.left, event.clientY - hostRect.top);
           return true;
         }
       },
@@ -333,7 +340,9 @@ class ProseMirrorEditor implements Editor {
         this.view.updateState(nextState);
         this.toolbar?.sync();
         this.menuController?.sync();
-        this.emit('change');
+        if (transaction.docChanged) {
+          this.emit('change');
+        }
       }
     });
   }
