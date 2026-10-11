@@ -14,7 +14,7 @@
     },
     "markdownSupport": {
       "title": "Markdown Support",
-      "description": "Write in Markdown, render as rich text. Bidirectional conversion with full syntax support.",
+      "description": "Parse Markdown into rich text and serialize back, including GFM tables. Lossy cases are documented.",
       "badge": "Plugin"
     },
     "tableEditing": {
@@ -24,12 +24,12 @@
     },
     "notionStyle": {
       "title": "Notion-Style UI",
-      "description": "Slash commands, block menus, drag handles — a Notion-inspired editing experience out of the box.",
+      "description": "Slash commands with keyboard navigation and a floating bubble toolbar for a lighter, Notion-inspired writing flow.",
       "badge": "Plugin"
     },
     "aiReady": {
       "title": "AI Ready",
-      "description": "Extensible architecture for AI-powered features: autocomplete, translation, summarization, and more.",
+      "description": "Hooks for your own AI backend: stream generated text into the document and cancel it cleanly.",
       "badge": "Plugin"
     }
   },

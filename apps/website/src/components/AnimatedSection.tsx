@@ -1,4 +1,5 @@
 import { useInView } from '../hooks/useInView';
+import { prefersReducedMotion } from '../lib/utils';
 
 type AnimatedSectionProps = {
   children: React.ReactNode;
@@ -15,7 +16,8 @@ export function AnimatedSection({
   initialInView = false,
   id,
 }: AnimatedSectionProps) {
-  const { ref, isInView } = useInView<HTMLElement>({ initialInView });
+  const reduceMotion = prefersReducedMotion();
+  const { ref, isInView } = useInView<HTMLElement>({ initialInView: initialInView || reduceMotion });
 
   return (
     <section
@@ -25,8 +27,7 @@ export function AnimatedSection({
       style={{
         opacity: isInView ? 1 : 0,
         transform: isInView ? 'translateY(0)' : 'translateY(24px)',
-        transition: `opacity 0.6s ease-out ${delay}s, transform 0.6s ease-out ${delay}s`,
-        willChange: 'opacity, transform',
+        transition: reduceMotion ? undefined : `opacity 0.6s ease-out ${delay}s, transform 0.6s ease-out ${delay}s`,
       }}
     >
       {children}

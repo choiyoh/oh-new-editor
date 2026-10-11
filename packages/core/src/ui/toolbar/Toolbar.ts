@@ -4,23 +4,28 @@ import type { EditorView } from 'prosemirror-view';
 
 import {
   clearFontSize,
+  getActiveLink,
   insertCodeBlock,
   insertHR,
   insertParagraph,
+  removeLink,
   setCodeBlockLanguage,
   setFontSize,
   setHeading,
+  setLink,
   toggleBlockquote,
   toggleBold,
   toggleBulletList,
   toggleCode,
   toggleItalic,
-  toggleLink,
   toggleOrderedList,
   toggleStrike,
   toggleUnderline
 } from '../../commands';
+import { DEFAULT_MESSAGES, formatMessage, type EditorMessages } from '../../i18n';
 import type { EditorToolbarAction } from '../../types';
+import { normalizeHref } from '../../utils/url';
+import { onPress } from '../dom';
 import { toolbarIcons } from '../icons';
 import { TableGridPicker } from '../menus/TableGridPicker';
 import { LinkEditor } from '../LinkEditor';
@@ -31,6 +36,7 @@ const DEFAULT_CODE_LANGUAGES = ['', 'plaintext', 'javascript', 'typescript', 'ts
 type ToolbarActionConfig = {
   label: string;
   title: string;
+  role?: string;
   command: (view: EditorView) => boolean | Promise<boolean>;
   isEnabled?: (state: EditorState) => boolean;
   isActive?: (state: EditorState) => boolean;
@@ -109,16 +115,6 @@ function isInCodeBlock(state: EditorState) {
   return getBlockValue(state) === 'code_block';
 }
 
-function getActiveLinkHref(state: EditorState): string | null {
-  const { $from, empty } = state.selection;
-  if (!empty) return null;
-  const linkMark = state.schema.marks.link;
-  if (!linkMark) return null;
-  const marks = state.storedMarks ?? $from.marks();
-  const link = linkMark.isInSet(marks);
-  return link?.attrs.href ?? null;
-}
-
 export class Toolbar {
   readonly element = document.createElement('div');
 
@@ -135,6 +131,7 @@ export class Toolbar {
   private readonly tableLimits?: { maxRows?: number; maxCols?: number };
   private gridPicker: TableGridPicker | null = null;
   private readOnly = false;
+  private readonly messages: EditorMessages;
   private linkEditor: LinkEditor = new LinkEditor();
 
   private readonly toolbarGroups: HTMLElement[] = [];
@@ -151,6 +148,9 @@ export class Toolbar {
   private readonly boundUpdateOverflow = () => this.updateOverflow();
   private readonly boundHandleDocumentMouseDown = (event: MouseEvent) => this.handleDocumentMouseDown(event);
   private readonly boundHandleKeydown = (event: KeyboardEvent) => this.handleToolbarKeydown(event);
+  private readonly boundHandleFocusIn = (event: FocusEvent) => {
+    if (event.target instanceof HTMLElement) this.refreshRovingTabIndex(event.target);
+  };
 
   constructor(
     private readonly view: EditorView,
@@ -163,8 +163,11 @@ export class Toolbar {
       insertActions?: EditorToolbarAction[];
       tableActions?: EditorToolbarAction[];
       tableLimits?: { maxRows?: number; maxCols?: number };
+      messages?: EditorMessages;
     } = {}
   ) {
+    this.messages = options.messages ?? DEFAULT_MESSAGES;
+    this.linkEditor.setLabels(this.messages);
     this.readOnly = Boolean(options.readOnly);
     this.insertActions = options.insertActions ?? [];
     this.tableActions = options.tableActions ?? [];
@@ -174,7 +177,7 @@ export class Toolbar {
     this.tableLimits = options.tableLimits;
     this.element.className = 'oh-editor__toolbar';
     this.element.setAttribute('role', 'toolbar');
-    this.element.setAttribute('aria-label', 'Text formatting');
+    this.element.setAttribute('aria-label', this.messages.toolbarLabel);
     this.element.setAttribute('aria-orientation', 'horizontal');
 
     this.renderToolbar(options.fontSizes ?? DEFAULT_FONT_SIZES);
@@ -195,7 +198,7 @@ export class Toolbar {
       const isAltButton = button.dataset.role === 'image-alt';
       button.disabled = this.readOnly || (isImageButton && !this.canUploadImages) || (isAltButton && !isImageSelected(state)) || (config.isEnabled ? !config.isEnabled(state) : false) || button.dataset.busy === 'true';
       button.dataset.active = config.isActive?.(state) ? 'true' : 'false';
-      button.setAttribute('aria-pressed', button.dataset.active);
+      if (config.isActive) button.setAttribute('aria-pressed', button.dataset.active);
 
       if (isAltButton) {
         button.hidden = !isImageSelected(state);
@@ -217,6 +220,8 @@ export class Toolbar {
     if (wasCodeLanguageHidden !== this.codeLanguageGroup.hidden) {
       requestAnimationFrame(() => this.updateOverflow());
     }
+
+    this.refreshRovingTabIndex();
   }
 
   destroy() {
@@ -231,16 +236,18 @@ export class Toolbar {
     window.removeEventListener('resize', this.boundUpdateOverflow);
     document.removeEventListener('mousedown', this.boundHandleDocumentMouseDown);
     this.element.removeEventListener('keydown', this.boundHandleKeydown);
+    this.element.removeEventListener('focusin', this.boundHandleFocusIn);
 
     this.element.remove();
     this.actions.clear();
   }
 
   private renderToolbar(fontSizes: number[]) {
+    const m = this.messages;
     const historyGroup = this.renderGroup(
       [
-        { label: toolbarIcons.undo, title: 'Undo', command: (view) => undo(view.state, view.dispatch) },
-        { label: toolbarIcons.redo, title: 'Redo', command: (view) => redo(view.state, view.dispatch) }
+        { label: toolbarIcons.undo, title: m.undo, command: (view) => undo(view.state, view.dispatch) },
+        { label: toolbarIcons.redo, title: m.redo, command: (view) => redo(view.state, view.dispatch) }
       ],
       'History'
     );
@@ -258,43 +265,16 @@ export class Toolbar {
 
     const marksGroup = this.renderGroup(
       [
-        { label: toolbarIcons.bold, title: 'Bold', command: (view) => run(view, toggleBold()), isActive: (state) => hasMark(state, 'strong') },
-        { label: toolbarIcons.italic, title: 'Italic', command: (view) => run(view, toggleItalic()), isActive: (state) => hasMark(state, 'em') },
-        { label: toolbarIcons.underline, title: 'Underline', command: (view) => run(view, toggleUnderline()), isActive: (state) => hasMark(state, 'underline') },
-        { label: toolbarIcons.strike, title: 'Strikethrough', command: (view) => run(view, toggleStrike()), isActive: (state) => hasMark(state, 'strike') },
-        { label: toolbarIcons.inlineCode, title: 'Inline code', command: (view) => run(view, toggleCode()), isActive: (state) => hasMark(state, 'code') },
+        { label: toolbarIcons.bold, title: m.bold, command: (view) => run(view, toggleBold()), isActive: (state) => hasMark(state, 'strong') },
+        { label: toolbarIcons.italic, title: m.italic, command: (view) => run(view, toggleItalic()), isActive: (state) => hasMark(state, 'em') },
+        { label: toolbarIcons.underline, title: m.underline, command: (view) => run(view, toggleUnderline()), isActive: (state) => hasMark(state, 'underline') },
+        { label: toolbarIcons.strike, title: m.strikethrough, command: (view) => run(view, toggleStrike()), isActive: (state) => hasMark(state, 'strike') },
+        { label: toolbarIcons.inlineCode, title: m.inlineCode, command: (view) => run(view, toggleCode()), isActive: (state) => hasMark(state, 'code') },
         {
           label: toolbarIcons.link,
-          title: 'Insert link',
-          command: () => {
-            const linkButton = this.element.querySelector<HTMLElement>('[aria-label="Insert link"]');
-            if (!linkButton) return false;
-            const btnRect = linkButton.getBoundingClientRect();
-            const container = this.element.parentElement;
-            if (!container) return false;
-            const existingHref = getActiveLinkHref(this.view.state);
-
-            this.linkEditor.open({
-              container,
-              coords: { left: btnRect.left, top: btnRect.bottom + 4 },
-              anchorHref: existingHref ?? undefined,
-              onConfirm: (href) => {
-                run(this.view, toggleLink(href));
-                this.view.focus();
-                this.sync();
-              },
-              onRemove: existingHref ? () => {
-                run(this.view, toggleLink(existingHref));
-                this.view.focus();
-                this.sync();
-              } : undefined,
-              onClose: () => {
-                this.view.focus();
-                this.sync();
-              }
-            });
-            return true;
-          },
+          title: m.link,
+          role: 'link',
+          command: () => this.openLinkEditor(),
           isActive: (state) => hasMark(state, 'link')
         }
       ],
@@ -304,11 +284,11 @@ export class Toolbar {
 
     const listBlockGroup = this.renderGroup(
       [
-        { label: toolbarIcons.bulletList, title: 'Bullet list', command: (view) => run(view, toggleBulletList()), isActive: (state) => isBlockActive(state, 'bullet_list') },
-        { label: toolbarIcons.orderedList, title: 'Ordered list', command: (view) => run(view, toggleOrderedList()), isActive: (state) => isBlockActive(state, 'ordered_list') },
-        { label: toolbarIcons.quote, title: 'Blockquote', command: (view) => run(view, toggleBlockquote()), isActive: (state) => isBlockActive(state, 'blockquote') },
-        { label: toolbarIcons.codeBlock, title: 'Code block', command: (view) => run(view, insertCodeBlock()), isActive: (state) => isBlockActive(state, 'code_block') },
-        { label: toolbarIcons.horizontalRule, title: 'Horizontal rule', command: (view) => run(view, insertHR()) }
+        { label: toolbarIcons.bulletList, title: m.bulletList, command: (view) => run(view, toggleBulletList()), isActive: (state) => isBlockActive(state, 'bullet_list') },
+        { label: toolbarIcons.orderedList, title: m.orderedList, command: (view) => run(view, toggleOrderedList()), isActive: (state) => isBlockActive(state, 'ordered_list') },
+        { label: toolbarIcons.quote, title: m.blockquote, command: (view) => run(view, toggleBlockquote()), isActive: (state) => isBlockActive(state, 'blockquote') },
+        { label: toolbarIcons.codeBlock, title: m.codeBlock, command: (view) => run(view, insertCodeBlock()), isActive: (state) => isBlockActive(state, 'code_block') },
+        { label: toolbarIcons.horizontalRule, title: m.horizontalRule, command: (view) => run(view, insertHR()) }
       ],
       'Lists and blocks'
     );
@@ -346,13 +326,11 @@ export class Toolbar {
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6" stroke-dasharray="28" stroke-dashoffset="8" stroke-linecap="round"><animateTransform attributeName="transform" type="rotate" from="0 8 8" to="360 8 8" dur="0.8s" repeatCount="indefinite"/></circle></svg>
       </span>
     `;
-    imageButton.title = 'Upload image';
-    imageButton.setAttribute('aria-label', 'Upload image');
-    imageButton.setAttribute('aria-pressed', 'false');
+    imageButton.title = this.messages.insertImage;
+    imageButton.setAttribute('aria-label', this.messages.insertImage);
     imageButton.dataset.role = 'image';
-    imageButton.addEventListener('mousedown', (event) => {
-      event.preventDefault();
-      if (this.readOnly || !this.onPickImage) return;
+    onPress(imageButton, () => {
+      if (this.readOnly || imageButton.disabled || !this.onPickImage) return;
       imageButton.dataset.busy = 'true';
       this.sync();
       void this.onPickImage().finally(() => {
@@ -363,7 +341,7 @@ export class Toolbar {
     });
     this.actions.set(imageButton, {
       label: toolbarIcons.image,
-      title: 'Upload image',
+      title: this.messages.insertImage,
       command: () => true
     });
     insertGroup.append(imageButton);
@@ -372,12 +350,10 @@ export class Toolbar {
     altButton.type = 'button';
     altButton.className = 'oh-editor__button';
     altButton.innerHTML = toolbarIcons.alt;
-    altButton.title = 'Edit image alt text';
-    altButton.setAttribute('aria-label', 'Edit image alt text');
-    altButton.setAttribute('aria-pressed', 'false');
+    altButton.title = this.messages.editImageAlt;
+    altButton.setAttribute('aria-label', this.messages.editImageAlt);
     altButton.dataset.role = 'image-alt';
-    altButton.addEventListener('mousedown', (event) => {
-      event.preventDefault();
+    onPress(altButton, () => {
       if (this.readOnly || !this.onEditImageAlt || !isImageSelected(this.view.state)) return;
       this.onEditImageAlt();
       this.view.focus();
@@ -385,7 +361,7 @@ export class Toolbar {
     });
     this.actions.set(altButton, {
       label: toolbarIcons.alt,
-      title: 'Edit image alt text',
+      title: this.messages.editImageAlt,
       command: () => true
     });
     insertGroup.append(altButton);
@@ -395,7 +371,7 @@ export class Toolbar {
     const hasTableInsert = this.insertActions.length > 0;
 
     for (let i = 0; i < this.insertActions.length; i++) {
-      const action = this.insertActions[i];
+      const action = { ...this.insertActions[i], title: this.actionTitle(this.insertActions[i]) };
 
       if (i === 0 && hasTableInsert) {
         // Table insert → grid picker
@@ -405,10 +381,9 @@ export class Toolbar {
         tableButton.innerHTML = action.label;
         tableButton.title = action.title;
         tableButton.setAttribute('aria-label', action.title);
-        tableButton.setAttribute('aria-pressed', 'false');
-        tableButton.addEventListener('mousedown', (event) => {
-          event.preventDefault();
-          if (this.readOnly) return;
+        tableButton.setAttribute('aria-haspopup', 'dialog');
+        onPress(tableButton, () => {
+          if (this.readOnly || tableButton.disabled) return;
           this.openGridPicker(tableButton);
         });
         this.actions.set(tableButton, {
@@ -436,12 +411,14 @@ export class Toolbar {
   private openGridPicker(anchor: HTMLElement) {
     this.closeGridPicker();
 
-    this.gridPicker = new TableGridPicker(this.view, this.tableLimits);
+    this.gridPicker = new TableGridPicker(this.view, this.tableLimits, this.messages);
 
-    const rect = anchor.getBoundingClientRect();
+    const anchorRect = (this.overflowContainer.contains(anchor) ? this.overflowButton : anchor).getBoundingClientRect();
     const editorRect = this.element.parentElement?.getBoundingClientRect() ?? document.body.getBoundingClientRect();
-    this.gridPicker.open(rect.left - editorRect.left, rect.bottom - editorRect.top + 4);
+    this.closeOverflow();
+    // Attach before opening so the picker can take focus for keyboard use.
     this.element.parentElement?.append(this.gridPicker.element);
+    this.gridPicker.open(anchorRect.left - editorRect.left, anchorRect.bottom - editorRect.top + 4);
   }
 
   private closeGridPicker() {
@@ -460,7 +437,7 @@ export class Toolbar {
     for (const action of this.tableActions) {
       this.appendActionButton(tableGroup, {
         label: action.label,
-        title: action.title,
+        title: this.actionTitle(action),
         command: action.run,
         isEnabled: action.isEnabled,
         isActive: action.isActive
@@ -477,14 +454,9 @@ export class Toolbar {
     group.setAttribute('aria-label', 'Block type');
 
     for (const [value, label] of [
-      ['paragraph', 'Paragraph'],
-      ['h1', 'H1'],
-      ['h2', 'H2'],
-      ['h3', 'H3'],
-      ['h4', 'H4'],
-      ['h5', 'H5'],
-      ['h6', 'H6'],
-      ['code_block', 'Code block']
+      ['paragraph', this.messages.paragraph],
+      ...[1, 2, 3, 4, 5, 6].map((level) => [`h${level}`, formatMessage(this.messages.heading, { level })]),
+      ['code_block', this.messages.codeBlock]
     ]) {
       const option = document.createElement('option');
       option.value = value;
@@ -494,8 +466,8 @@ export class Toolbar {
 
     this.blockSelect.className = 'oh-editor__select';
     this.blockSelect.dataset.selectKind = 'block';
-    this.blockSelect.title = 'Block type';
-    this.blockSelect.setAttribute('aria-label', 'Block type');
+    this.blockSelect.title = this.messages.blockType;
+    this.blockSelect.setAttribute('aria-label', this.messages.blockType);
     this.blockSelect.addEventListener('change', () => {
       if (this.readOnly) return;
       const value = this.blockSelect.value;
@@ -522,7 +494,7 @@ export class Toolbar {
 
     const defaultOption = document.createElement('option');
     defaultOption.value = '';
-    defaultOption.textContent = 'Font size';
+    defaultOption.textContent = this.messages.fontSize;
     this.fontSizeSelect.append(defaultOption);
 
     for (const size of fontSizes) {
@@ -534,8 +506,8 @@ export class Toolbar {
 
     this.fontSizeSelect.className = 'oh-editor__select';
     this.fontSizeSelect.dataset.selectKind = 'font-size';
-    this.fontSizeSelect.title = 'Font size';
-    this.fontSizeSelect.setAttribute('aria-label', 'Font size');
+    this.fontSizeSelect.title = this.messages.fontSize;
+    this.fontSizeSelect.setAttribute('aria-label', this.messages.fontSize);
     this.fontSizeSelect.addEventListener('change', () => {
       if (this.readOnly) return;
       const value = this.fontSizeSelect.value;
@@ -557,14 +529,14 @@ export class Toolbar {
     for (const language of DEFAULT_CODE_LANGUAGES) {
       const option = document.createElement('option');
       option.value = language;
-      option.textContent = language || 'Code lang';
+      option.textContent = language || this.messages.codeLanguagePlaceholder;
       this.codeLanguageSelect.append(option);
     }
 
     this.codeLanguageSelect.className = 'oh-editor__select';
     this.codeLanguageSelect.dataset.selectKind = 'code-language';
-    this.codeLanguageSelect.title = 'Code block language';
-    this.codeLanguageSelect.setAttribute('aria-label', 'Code block language');
+    this.codeLanguageSelect.title = this.messages.codeLanguage;
+    this.codeLanguageSelect.setAttribute('aria-label', this.messages.codeLanguage);
     this.codeLanguageSelect.addEventListener('change', () => {
       if (this.readOnly || !isInCodeBlock(this.view.state)) return;
       run(this.view, setCodeBlockLanguage(this.codeLanguageSelect.value || null));
@@ -599,10 +571,10 @@ export class Toolbar {
     button.innerHTML = config.label;
     button.title = config.title;
     button.setAttribute('aria-label', config.title);
-    button.setAttribute('aria-pressed', 'false');
-    button.addEventListener('mousedown', (event) => {
-      event.preventDefault();
-      if (this.readOnly) return;
+    if (config.isActive) button.setAttribute('aria-pressed', 'false');
+    if (config.role) button.dataset.role = config.role;
+    onPress(button, () => {
+      if (this.readOnly || button.disabled) return;
 
       const result = config.command(this.view);
       if (result instanceof Promise) {
@@ -616,11 +588,67 @@ export class Toolbar {
         return;
       }
 
-      this.view.focus();
+      if (config.role !== 'link') this.view.focus();
       this.sync();
     });
     this.actions.set(button, config);
     group.append(button);
+  }
+
+  private actionTitle(action: EditorToolbarAction) {
+    const translated = action.id ? (this.messages as unknown as Record<string, string | undefined>)[action.id] : undefined;
+    return translated ?? action.title;
+  }
+
+  private openLinkEditor() {
+    const linkButton = this.element.querySelector<HTMLElement>('[data-role="link"]');
+    const container = this.element.parentElement;
+    if (!linkButton || !container) return false;
+
+    const anchor = this.overflowContainer.contains(linkButton) ? this.overflowButton : linkButton;
+    const btnRect = anchor.getBoundingClientRect();
+    const existing = getActiveLink(this.view.state);
+    this.closeOverflow();
+
+    this.linkEditor.open({
+      container,
+      coords: { left: btnRect.left, top: btnRect.bottom + 4 },
+      anchorHref: existing?.href,
+      onConfirm: (value) => {
+        const href = normalizeHref(value);
+        if (!href) return false;
+        run(this.view, setLink(href));
+        return true;
+      },
+      onRemove: existing ? () => run(this.view, removeLink()) : undefined,
+      onClose: () => {
+        this.view.focus();
+        this.sync();
+      }
+    });
+    return true;
+  }
+
+  private getFocusables() {
+    return Array.from(
+      this.element.querySelectorAll<HTMLElement>('button:not([hidden]):not(:disabled), select:not([hidden]):not(:disabled)')
+    ).filter((element) => {
+      if (element.closest('[hidden]')) return false;
+      return this.overflowOpen || !this.overflowContainer.contains(element);
+    });
+  }
+
+  /** Keeps a single tab stop in the toolbar (WAI-ARIA toolbar pattern). */
+  private refreshRovingTabIndex(preferred?: HTMLElement) {
+    const focusables = this.getFocusables();
+    const all = this.element.querySelectorAll<HTMLElement>('button, select');
+    const current = preferred && focusables.includes(preferred)
+      ? preferred
+      : focusables.find((element) => element.tabIndex === 0) ?? focusables[0];
+
+    for (const element of all) {
+      element.tabIndex = element === current ? 0 : -1;
+    }
   }
 
   private setupOverflow() {
@@ -633,23 +661,22 @@ export class Toolbar {
     this.overflowButton.type = 'button';
     this.overflowButton.className = 'oh-editor__button oh-editor__toolbar-overflow-button';
     this.overflowButton.innerHTML = '&#8942;';
-    this.overflowButton.title = 'More';
-    this.overflowButton.setAttribute('aria-label', 'More');
+    this.overflowButton.title = this.messages.more;
+    this.overflowButton.setAttribute('aria-label', this.messages.more);
     this.overflowButton.setAttribute('aria-haspopup', 'true');
     this.overflowButton.setAttribute('aria-expanded', 'false');
     this.overflowButton.setAttribute('aria-controls', overflowId);
-    this.overflowButton.addEventListener('mousedown', (event) => {
-      event.preventDefault();
-      this.toggleOverflow();
-    });
+    // detail === 0 means the click came from the keyboard (Enter/Space).
+    onPress(this.overflowButton, (event) => this.toggleOverflow(event.detail === 0));
 
     this.overflowGroup.className = 'oh-editor__toolbar-group oh-editor__toolbar-group--overflow';
     this.overflowGroup.setAttribute('role', 'group');
-    this.overflowGroup.setAttribute('aria-label', 'More actions');
+    this.overflowGroup.setAttribute('aria-label', this.messages.moreActions);
     this.overflowGroup.append(this.overflowButton, this.overflowContainer);
     this.element.append(this.overflowGroup);
 
     this.element.addEventListener('keydown', this.boundHandleKeydown);
+    this.element.addEventListener('focusin', this.boundHandleFocusIn);
     document.addEventListener('mousedown', this.boundHandleDocumentMouseDown);
     window.addEventListener('resize', this.boundUpdateOverflow);
 
@@ -739,21 +766,26 @@ export class Toolbar {
     if (!hasOverflow && this.overflowOpen) {
       this.closeOverflow();
     }
+
+    this.refreshRovingTabIndex();
   }
 
-  private toggleOverflow() {
+  private toggleOverflow(focusFirst = false) {
     if (this.overflowOpen) {
       this.closeOverflow();
     } else {
-      this.openOverflow();
+      this.openOverflow(focusFirst);
     }
   }
 
-  private openOverflow() {
+  private openOverflow(focusFirst = false) {
     this.overflowOpen = true;
     this.overflowContainer.classList.add('is-open');
     this.overflowContainer.setAttribute('aria-hidden', 'false');
     this.overflowButton.setAttribute('aria-expanded', 'true');
+    if (focusFirst) {
+      this.overflowContainer.querySelector<HTMLElement>('button:not([hidden]):not(:disabled), select:not([hidden]):not(:disabled)')?.focus();
+    }
   }
 
   private closeOverflow() {
@@ -786,11 +818,9 @@ export class Toolbar {
     if (!isHorizontal && !isHomeEnd) return;
 
     const target = event.target as HTMLElement;
-    if (target.tagName !== 'BUTTON') return;
+    if (target.tagName !== 'BUTTON' && target.tagName !== 'SELECT') return;
 
-    const focusables = Array.from(
-      this.element.querySelectorAll<HTMLElement>('button:not([hidden]):not(:disabled), select:not([hidden]):not(:disabled)')
-    );
+    const focusables = this.getFocusables();
 
     const index = focusables.indexOf(target);
     if (index === -1) return;

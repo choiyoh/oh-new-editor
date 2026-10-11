@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { AnimatedSection } from '../AnimatedSection';
+import { REPO_URL } from '../../lib/site';
 import { Button } from '../ui/Button';
 
 export function CTABanner() {
@@ -30,7 +31,9 @@ export function CTABanner() {
           </Button>
           <Button
             as="a"
-            href="https://github.com"
+            href={REPO_URL}
+            target="_blank"
+            rel="noreferrer"
             variant="ghost"
             className="text-white hover:bg-white/10"
           >

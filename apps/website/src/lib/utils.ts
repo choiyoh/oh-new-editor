@@ -6,3 +6,31 @@ export function navigate(to: string) {
   window.history.pushState({}, '', to);
   window.dispatchEvent(new PopStateEvent('popstate'));
 }
+
+export function prefersReducedMotion() {
+  return typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+}
+
+/**
+ * Click handler for in-site links: client-side routes for `/paths`, and
+ * `#section` links that also work from other pages (e.g. the docs).
+ */
+export function handleSiteLinkClick(event: { preventDefault(): void; metaKey?: boolean; ctrlKey?: boolean }, href: string) {
+  if (event.metaKey || event.ctrlKey) return;
+
+  if (href.startsWith('/')) {
+    event.preventDefault();
+    navigate(href);
+    window.scrollTo({ top: 0, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+    return;
+  }
+
+  if (href.startsWith('#') && window.location.pathname !== '/') {
+    event.preventDefault();
+    navigate(`/${href}`);
+    // Wait for the landing page to render before scrolling to the section.
+    requestAnimationFrame(() => {
+      document.querySelector(href)?.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+    });
+  }
+}

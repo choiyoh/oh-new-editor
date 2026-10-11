@@ -11,12 +11,12 @@
   "types": "./dist/src/index.d.ts",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yohan/oh-new-editor.git",
+    "url": "https://github.com/choiyoh/oh-new-editor.git",
     "directory": "packages/core"
   },
-  "homepage": "https://github.com/yohan/oh-new-editor",
+  "homepage": "https://github.com/choiyoh/oh-new-editor#readme",
   "bugs": {
-    "url": "https://github.com/yohan/oh-new-editor/issues"
+    "url": "https://github.com/choiyoh/oh-new-editor/issues"
   },
   "publishConfig": {
     "access": "public"
@@ -61,8 +61,15 @@
     "test": "vitest run",
     "typecheck": "tsc --project tsconfig.json --noEmit"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "editor",
+    "rich-text",
+    "wysiwyg",
+    "prosemirror",
+    "markdown",
+    "headless"
+  ],
+  "author": "choiyoh",
   "license": "MIT",
   "dependencies": {
     "dompurify": "^3.2.7",

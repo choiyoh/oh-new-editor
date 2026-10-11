@@ -57,6 +57,27 @@ function createTurndownService() {
     }
   });
 
+  // Turndown's default list item rule pads markers to four columns and leaves
+  // whitespace-only lines, which turns every list into a "loose" list.
+  service.addRule('listItem', {
+    filter: 'li',
+    replacement: (content: string, node: HTMLElement, options: { bulletListMarker?: string }) => {
+      const parent = node.parentNode as HTMLElement | null;
+      let prefix = `${options.bulletListMarker ?? '-'} `;
+      if (parent?.nodeName === 'OL') {
+        const start = Number(parent.getAttribute('start') ?? '1');
+        prefix = `${start + Array.prototype.indexOf.call(parent.children, node)}. `;
+      }
+      const indent = ' '.repeat(prefix.length);
+      const body = content
+        .replace(/^\n+/, '')
+        .replace(/\n+$/, '')
+        .replace(/\n/g, `\n${indent}`)
+        .replace(/\n[ ]+(?=\n)/g, '\n');
+      return prefix + body + (node.nextSibling ? '\n' : '');
+    }
+  });
+
   service.addRule('underlineFallback', {
     filter: 'u',
     replacement: (content: string) => `<u>${content}</u>`
@@ -103,7 +124,8 @@ function createTurndownService() {
 }
 
 export function serializeMarkdown(doc: EditorDocument) {
-  const html = serializeHtml(doc);
+  // Use the document's own schema so table (or custom) nodes serialize.
+  const html = serializeHtml(doc, doc.type.schema);
   const container = window.document.createElement('div');
   container.innerHTML = html;
 

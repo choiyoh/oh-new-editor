@@ -1,4 +1,4 @@
-import { EditorState, NodeSelection, Plugin } from 'prosemirror-state';
+import { EditorState, NodeSelection, Plugin, TextSelection } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 
 import { parseHtml } from './parsers/html';
@@ -14,6 +14,7 @@ import { createKeymapPlugin, createBaseKeymapPlugin } from './plugins/keymap';
 import { createPastePlugin } from './plugins/paste';
 import { createPlaceholderPlugin } from './plugins/placeholder';
 import { editorSchema } from './schema';
+import { resolveMessages, type EditorMessages } from './i18n';
 import { serializeHtml } from './serializers/html';
 import type { Editor, EditorAIController, EditorAIOptions, EditorEventHandler, EditorEventName, EditorMenuController, EditorOptions, EditorSchema, EditorStyle, EditorStyleMap, EditorToolbarController, EditorToolbarSupport, AIContext } from './types';
 import { aiPluginKey, createAIPlugin } from './plugins/ai';
@@ -30,13 +31,22 @@ function createEventStore() {
   );
 }
 
-function createPlugins(options: EditorOptions) {
+function isSelectionInTableCell(state: EditorState) {
+  const { $from } = state.selection;
+  for (let depth = $from.depth; depth > 0; depth -= 1) {
+    const role = $from.node(depth).type.spec.tableRole;
+    if (role === 'cell' || role === 'header_cell') return true;
+  }
+  return false;
+}
+
+function createPlugins(options: EditorOptions, schema: EditorSchema, messages: EditorMessages) {
   return [
     createHistoryPlugin(),
-    createInputRulesPlugin(),
-    createImageUploadPlugin(options.image),
+    createInputRulesPlugin(schema),
+    createImageUploadPlugin(options.image, messages),
     createPastePlugin(options.table),
-    createKeymapPlugin(),
+    createKeymapPlugin(schema),
     createBaseKeymapPlugin(),
     ...(options.table?.plugins ?? []),
     ...(options.plugins ?? []),
@@ -51,6 +61,7 @@ class ProseMirrorEditor implements Editor {
   private readonly content: HTMLElement;
   private readonly options: EditorOptions;
   private readonly schema: EditorSchema;
+  private readonly messages: EditorMessages;
   private readonly plugins: Plugin[];
   private view: EditorView;
   private toolbar: EditorToolbarController | null = null;
@@ -73,7 +84,8 @@ class ProseMirrorEditor implements Editor {
     this.schema = options.schema ?? options.table?.schema ?? editorSchema;
     this.content = document.createElement('div');
     this.content.className = 'oh-editor__content';
-    this.plugins = createPlugins(options);
+    this.messages = resolveMessages(options.messages);
+    this.plugins = createPlugins(options, this.schema, this.messages);
     this.host.classList.add('oh-editor');
     this.host.replaceChildren();
     this.outputFormat = options.outputFormat ?? DEFAULT_OUTPUT_FORMAT;
@@ -99,7 +111,7 @@ class ProseMirrorEditor implements Editor {
       this.currentStyle = 'toolbar';
     }
 
-    const menu = options.table?.createMenu?.(this.view);
+    const menu = options.table?.createMenu?.(this.view, this.messages);
     if (menu) {
       this.host.append(menu.element);
       this.menuController = menu;
@@ -197,9 +209,12 @@ class ProseMirrorEditor implements Editor {
     this.emit('focus');
   };
 
-  private readonly handleBlur = () => {
+  private readonly handleBlur = (event: FocusEvent) => {
     this.toolbar?.sync();
-    this.menuController?.close();
+    // Moving focus into the table menu (keyboard navigation) keeps it open.
+    if (!this.menuController?.contains(event.relatedTarget)) {
+      this.menuController?.close();
+    }
     this.emit('blur');
   };
 
@@ -227,7 +242,7 @@ class ProseMirrorEditor implements Editor {
   }
 
   private parseContent(content: string | undefined, format: 'html' | 'markdown') {
-    return format === 'markdown' ? this.getMarkdownSupport().parse(content) : parseHtml(content, this.schema);
+    return format === 'markdown' ? this.getMarkdownSupport().parse(content, this.schema) : parseHtml(content, this.schema);
   }
 
   private getMarkdownSupport() {
@@ -245,7 +260,7 @@ class ProseMirrorEditor implements Editor {
   }
 
   private uploadImages(files: File[]) {
-    uploadImageFiles(this.view, files, this.options.image, this.view.state.selection.from, this.uploadLifecycle);
+    uploadImageFiles(this.view, files, this.options.image, this.view.state.selection.from, this.uploadLifecycle, this.messages);
   }
 
   private editSelectedImageAlt() {
@@ -255,7 +270,7 @@ class ProseMirrorEditor implements Editor {
     }
 
     const currentAlt = selection.node.attrs.alt ?? '';
-    const nextAlt = window.prompt('Enter image alt text', currentAlt);
+    const nextAlt = window.prompt(this.messages.imageAltPrompt, currentAlt);
     if (nextAlt === null) {
       return;
     }
@@ -279,7 +294,8 @@ class ProseMirrorEditor implements Editor {
       onEditImageAlt: () => this.editSelectedImageAlt(),
       insertActions: this.options.table?.insertActions,
       tableActions: this.options.table?.actions,
-      tableLimits: this.options.table ? { maxRows: this.options.table.maxRows, maxCols: this.options.table.maxCols } : undefined
+      tableLimits: this.options.table ? { maxRows: this.options.table.maxRows, maxCols: this.options.table.maxCols } : undefined,
+      messages: this.messages
     };
   }
 
@@ -293,7 +309,7 @@ class ProseMirrorEditor implements Editor {
             throw new Error('Expected image node position accessor');
           }
 
-          return createImageNodeView(view)(node, view, getPos);
+          return createImageNodeView(view, this.messages)(node, view, getPos);
         }
       },
       handleDoubleClickOn: (_view, pos, node) => {
@@ -312,19 +328,39 @@ class ProseMirrorEditor implements Editor {
           }
 
           const target = event.target;
-          if (!(target instanceof HTMLElement) || !target.closest('td, th')) {
+          const clickedCell = target instanceof HTMLElement ? target.closest('td, th') : null;
+          // Keyboard-initiated context menus (Shift+F10, Menu key) target the
+          // editor itself; open the menu at the cursor when it sits in a cell.
+          const fromKeyboard = !clickedCell && target === view.dom && isSelectionInTableCell(view.state);
+          if (!clickedCell && !fromKeyboard) {
             this.menuController.close();
             return false;
           }
 
-          const coords = view.posAtCoords({ left: event.clientX, top: event.clientY });
-          if (!coords) {
-            return false;
+          let left = event.clientX;
+          let top = event.clientY;
+          if (fromKeyboard) {
+            const coords = view.coordsAtPos(view.state.selection.from);
+            left = coords.left;
+            top = coords.bottom;
+          } else {
+            const coords = view.posAtCoords({ left: event.clientX, top: event.clientY });
+            if (!coords) {
+              return false;
+            }
+
+            // Keep an existing (cell) selection that already covers the clicked
+            // position so "Merge cells" stays available; otherwise move the
+            // cursor into the clicked cell.
+            const { from, to } = view.state.selection;
+            if (coords.pos < from || coords.pos > to) {
+              view.dispatch(view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(coords.pos))));
+            }
           }
 
           event.preventDefault();
-          view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, coords.pos)));
-          this.menuController.open(event.clientX, event.clientY);
+          const hostRect = this.host.getBoundingClientRect();
+          this.menuController.open(left - hostRect.left, top - hostRect.top);
           return true;
         }
       },
@@ -333,7 +369,9 @@ class ProseMirrorEditor implements Editor {
         this.view.updateState(nextState);
         this.toolbar?.sync();
         this.menuController?.sync();
-        this.emit('change');
+        if (transaction.docChanged) {
+          this.emit('change');
+        }
       }
     });
   }
@@ -427,8 +465,13 @@ class ProseMirrorEditor implements Editor {
           }
         } catch (err) {
           // On abort, let cancel() handle cleanup
-          if ((err as Error).name === 'AbortError') return;
-          // On other errors, keep any text streamed so far
+          if (signal.aborted || (err as Error)?.name === 'AbortError') return;
+          // On other errors, keep any text streamed so far and report it.
+          if (aiOptions.onError) {
+            aiOptions.onError(err);
+          } else {
+            console.error('[oh-new-editor] AI generation failed', err);
+          }
         } finally {
           // Close AI streaming state (creates history boundary)
           const currentState = aiPluginKey.getState(this.view.state);

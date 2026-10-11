@@ -2,30 +2,38 @@ import { NodeSelection } from 'prosemirror-state';
 import type { EditorState } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 
-const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
 const MOBILE_SHEET_MAX_WIDTH = 768;
 
 function shouldUseBottomSheet() {
-  return isTouchDevice || (typeof window !== 'undefined' && window.innerWidth < MOBILE_SHEET_MAX_WIDTH);
+  if (typeof window === 'undefined') return false;
+  // A coarse primary pointer (phones/tablets) rather than "has a touch screen",
+  // so touch-enabled laptops keep the inline popup.
+  const coarsePointer = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
+  return coarsePointer || window.innerWidth < MOBILE_SHEET_MAX_WIDTH;
 }
 
 import {
+  getActiveLink,
   insertCodeBlock,
   insertHR,
   insertParagraph,
+  removeLink,
   setCodeBlockLanguage,
   setHeading,
+  setLink,
   toggleBlockquote,
   toggleBold,
   toggleBulletList,
   toggleCode,
   toggleItalic,
-  toggleLink,
   toggleOrderedList,
   toggleStrike,
   toggleUnderline
 } from '../../commands';
+import { DEFAULT_MESSAGES, formatMessage, type EditorMessages } from '../../i18n';
 import type { EditorToolbarAction, EditorToolbarController } from '../../types';
+import { normalizeHref } from '../../utils/url';
+import { onPress } from '../dom';
 import { toolbarIcons } from '../icons';
 import { LinkEditor } from '../LinkEditor';
 import { TableGridPicker } from '../menus/TableGridPicker';
@@ -36,9 +44,10 @@ type NotionUiOptions = {
   onEditImageAlt?: () => void;
   insertActions?: EditorToolbarAction[];
   tableLimits?: { maxRows?: number; maxCols?: number };
+  messages?: EditorMessages;
 };
 
-type SlashCategory = 'Basic' | 'Media' | 'Advanced';
+type SlashCategory = 'basic' | 'media' | 'advanced';
 
 type SlashItem = {
   icon: string;
@@ -61,7 +70,8 @@ function getSlashMatch(state: EditorState) {
   if (!$from.parent.isTextblock) return null;
 
   const textBefore = $from.parent.textBetween(0, $from.parentOffset, undefined, '\0');
-  const match = /(?:^|\s)\/(?<query>[\w-]*)$/.exec(textBefore);
+  // Any run of non-space characters, so Hangul/CJK queries such as "/제목" match.
+  const match = /(?:^|\s)\/(?<query>[^\s/]*)$/.exec(textBefore);
   if (!match?.groups) return null;
 
   const query = match.groups.query ?? '';
@@ -100,21 +110,6 @@ function isImageSelected(state: EditorState) {
   return state.selection instanceof NodeSelection && state.selection.node.type === state.schema.nodes.image;
 }
 
-function isLinkAtCursor(state: EditorState) {
-  const { from, empty } = state.selection;
-  if (!empty) return false;
-  const marks = state.storedMarks ?? state.selection.$from.marks();
-  return Boolean(state.schema.marks.link?.isInSet(marks));
-}
-
-function getActiveLinkHref(state: EditorState): string | null {
-  const linkMark = state.schema.marks.link;
-  if (!linkMark) return null;
-  const marks = state.storedMarks ?? state.selection.$from.marks();
-  const link = linkMark.isInSet(marks);
-  return link?.attrs.href ?? null;
-}
-
 const CHOSEONG = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
 
 function getChoseong(str: string): string {
@@ -136,8 +131,13 @@ export class NotionUi implements EditorToolbarController {
   private readonly codeLanguage = document.createElement('select');
   private readonly slashItems: SlashItem[];
   private selectedSlashIndex = 0;
+  private slashQuery: string | null = null;
+  private dismissedSlashFrom: number | null = null;
+  private keyTarget: HTMLElement;
   private readOnly = false;
   private readonly onEditImageAlt?: () => void;
+  private readonly messages: EditorMessages;
+  private bubbleHideHandler: (() => void) | null = null;
   private readonly tableLimits?: { maxRows?: number; maxCols?: number };
   private gridPicker: TableGridPicker | null = null;
   private linkEditor: LinkEditor = new LinkEditor();
@@ -177,6 +177,8 @@ export class NotionUi implements EditorToolbarController {
     private readonly view: EditorView,
     options: NotionUiOptions = {}
   ) {
+    this.messages = options.messages ?? DEFAULT_MESSAGES;
+    this.linkEditor.setLabels(this.messages);
     this.readOnly = Boolean(options.readOnly);
     this.onEditImageAlt = options.onEditImageAlt;
     this.tableLimits = options.tableLimits;
@@ -190,16 +192,19 @@ export class NotionUi implements EditorToolbarController {
     this.slash.className = 'oh-editor__slash-menu';
     this.slash.hidden = true;
     this.slashList.className = 'oh-editor__slash-list';
+    this.slashList.id = `oh-editor-slash-${Math.random().toString(36).slice(2, 9)}`;
+    this.slashList.setAttribute('role', 'listbox');
+    this.slashList.setAttribute('aria-label', this.messages.slashMenu);
     this.slash.append(this.slashList);
 
     this.codeLanguage.className = 'oh-editor__code-language-chip';
     this.codeLanguage.hidden = true;
-    this.codeLanguage.title = 'Code block language';
-    this.codeLanguage.setAttribute('aria-label', 'Code block language');
+    this.codeLanguage.title = this.messages.codeLanguage;
+    this.codeLanguage.setAttribute('aria-label', this.messages.codeLanguage);
     for (const language of ['', 'plaintext', 'javascript', 'typescript', 'tsx', 'jsx', 'json', 'html', 'css', 'bash', 'markdown']) {
       const option = document.createElement('option');
       option.value = language;
-      option.textContent = language || 'Code lang';
+      option.textContent = language || this.messages.codeLanguagePlaceholder;
       this.codeLanguage.append(option);
     }
     this.codeLanguage.addEventListener('change', () => {
@@ -212,7 +217,10 @@ export class NotionUi implements EditorToolbarController {
     this.element.append(this.bubble, this.slash, this.codeLanguage);
     this.slashItems = this.createSlashItems(options);
 
-    this.view.dom.addEventListener('keydown', this.handleKeyDown);
+    // Capture on the content wrapper so the slash menu sees Enter/arrows before
+    // ProseMirror's own keydown handling (which would split the block).
+    this.keyTarget = this.view.dom.parentElement ?? this.view.dom;
+    this.keyTarget.addEventListener('keydown', this.handleKeyDown, true);
     this.view.dom.addEventListener('input', this.handleInput);
 
     if (typeof window !== 'undefined' && window.visualViewport) {
@@ -226,6 +234,7 @@ export class NotionUi implements EditorToolbarController {
     this.readOnly = readOnly;
     if (readOnly) {
       this.hideSlashMenu();
+      this.cancelBubbleHide();
       this.bubble.hidden = true;
       this.codeLanguage.hidden = true;
     }
@@ -239,8 +248,11 @@ export class NotionUi implements EditorToolbarController {
   }
 
   destroy() {
-    this.view.dom.removeEventListener('keydown', this.handleKeyDown);
+    this.keyTarget.removeEventListener('keydown', this.handleKeyDown, true);
     this.view.dom.removeEventListener('input', this.handleInput);
+    this.view.dom.removeAttribute('aria-expanded');
+    this.view.dom.removeAttribute('aria-controls');
+    this.view.dom.removeAttribute('aria-activedescendant');
 
     if (typeof window !== 'undefined' && window.visualViewport) {
       window.visualViewport.removeEventListener('resize', this.handleVisualViewportResize);
@@ -258,16 +270,13 @@ export class NotionUi implements EditorToolbarController {
   private openGridPicker() {
     this.closeGridPicker();
 
-    this.gridPicker = new TableGridPicker(this.view, this.tableLimits);
+    this.gridPicker = new TableGridPicker(this.view, this.tableLimits, this.messages);
 
     const coords = this.view.coordsAtPos(this.view.state.selection.from);
-    this.gridPicker.open(0, 0);
-    this.element.append(this.gridPicker.element);
-
-    // Position after append so we can measure
     const editorRect = this.element.getBoundingClientRect();
-    this.gridPicker.element.style.left = `${coords.left - editorRect.left}px`;
-    this.gridPicker.element.style.top = `${coords.bottom - editorRect.top + 8}px`;
+    // Attach before opening so the picker can take focus for keyboard use.
+    this.element.append(this.gridPicker.element);
+    this.gridPicker.open(coords.left - editorRect.left, coords.bottom - editorRect.top + 8);
   }
 
   private closeGridPicker() {
@@ -280,22 +289,19 @@ export class NotionUi implements EditorToolbarController {
   private openLinkEditor() {
     const container = this.element;
     const coords = this.view.coordsAtPos(this.view.state.selection.from);
-    const existingHref = getActiveLinkHref(this.view.state);
+    const existing = getActiveLink(this.view.state);
 
     this.linkEditor.open({
       container,
       coords: { left: coords.left, top: coords.bottom + 4 },
-      anchorHref: existingHref ?? undefined,
-      onConfirm: (href) => {
-        run(this.view, toggleLink(href));
-        this.view.focus();
-        this.sync();
+      anchorHref: existing?.href,
+      onConfirm: (value) => {
+        const href = normalizeHref(value);
+        if (!href) return false;
+        run(this.view, setLink(href));
+        return true;
       },
-      onRemove: existingHref ? () => {
-        run(this.view, toggleLink(existingHref));
-        this.view.focus();
-        this.sync();
-      } : undefined,
+      onRemove: existing ? () => run(this.view, removeLink()) : undefined,
       onClose: () => {
         this.view.focus();
         this.sync();
@@ -308,34 +314,30 @@ export class NotionUi implements EditorToolbarController {
   };
 
   private readonly handleKeyDown = (event: KeyboardEvent) => {
-    if (this.readOnly || this.slash.hidden) return;
+    if (this.readOnly || !this.isSlashOpen()) return;
+    if (!(event.target instanceof Node) || !this.view.dom.contains(event.target)) return;
+    // Let the IME finish composing (e.g. Korean) before handling Enter/arrows.
+    if (event.isComposing || event.keyCode === 229) return;
+    if (!['ArrowDown', 'ArrowUp', 'Escape', 'Enter', 'Tab'].includes(event.key)) return;
 
     const visibleItems = this.getVisibleSlashItems();
     if (!visibleItems.length) return;
 
+    // Handled here only: keep ProseMirror from also acting on the key.
+    event.preventDefault();
+    event.stopPropagation();
+
     if (event.key === 'ArrowDown') {
-      event.preventDefault();
       this.selectedSlashIndex = (this.selectedSlashIndex + 1) % visibleItems.length;
       this.renderSlashItems();
-      return;
-    }
-
-    if (event.key === 'ArrowUp') {
-      event.preventDefault();
+    } else if (event.key === 'ArrowUp') {
       this.selectedSlashIndex = (this.selectedSlashIndex - 1 + visibleItems.length) % visibleItems.length;
       this.renderSlashItems();
-      return;
-    }
-
-    if (event.key === 'Escape') {
-      event.preventDefault();
+    } else if (event.key === 'Escape') {
+      // Remember the dismissed "/" so typing more does not reopen the menu.
+      this.dismissedSlashFrom = getSlashMatch(this.view.state)?.from ?? null;
       this.hideSlashMenu();
-      this.view.focus();
-      return;
-    }
-
-    if (event.key === 'Enter') {
-      event.preventDefault();
+    } else {
       void this.applySlashItem(visibleItems[this.selectedSlashIndex] ?? null);
     }
   };
@@ -345,24 +347,25 @@ export class NotionUi implements EditorToolbarController {
     title: string;
     action: () => unknown;
     isActive: () => boolean;
-    context: 'text' | 'image' | 'link';
+    context: 'text' | 'image';
   }[] = [];
 
   private bubbleButtons: HTMLButtonElement[] = [];
   private bubbleInitialized = false;
 
   private renderBubble() {
+    const m = this.messages;
     this.bubbleActions = [
-      { icon: toolbarIcons.bold, title: 'Bold', action: () => run(this.view, toggleBold()), isActive: () => hasMark(this.view.state, 'strong'), context: 'text' },
-      { icon: toolbarIcons.italic, title: 'Italic', action: () => run(this.view, toggleItalic()), isActive: () => hasMark(this.view.state, 'em'), context: 'text' },
-      { icon: toolbarIcons.underline, title: 'Underline', action: () => run(this.view, toggleUnderline()), isActive: () => hasMark(this.view.state, 'underline'), context: 'text' },
-      { icon: toolbarIcons.strike, title: 'Strikethrough', action: () => run(this.view, toggleStrike()), isActive: () => hasMark(this.view.state, 'strike'), context: 'text' },
-      { icon: toolbarIcons.inlineCode, title: 'Inline code', action: () => run(this.view, toggleCode()), isActive: () => hasMark(this.view.state, 'code'), context: 'text' },
-      { icon: toolbarIcons.link, title: 'Link', action: () => { this.openLinkEditor(); }, isActive: () => hasMark(this.view.state, 'link'), context: 'text' },
-      { icon: toolbarIcons.bulletList, title: 'Bullet list', action: () => run(this.view, toggleBulletList()), isActive: () => isBlockActive(this.view.state, 'bullet_list'), context: 'text' },
-      { icon: toolbarIcons.orderedList, title: 'Ordered list', action: () => run(this.view, toggleOrderedList()), isActive: () => isBlockActive(this.view.state, 'ordered_list'), context: 'text' },
-      { icon: toolbarIcons.quote, title: 'Blockquote', action: () => run(this.view, toggleBlockquote()), isActive: () => isBlockActive(this.view.state, 'blockquote'), context: 'text' },
-      { icon: toolbarIcons.alt, title: 'Edit alt text', action: () => { this.onEditImageAlt?.(); }, isActive: () => false, context: 'image' }
+      { icon: toolbarIcons.bold, title: m.bold, action: () => run(this.view, toggleBold()), isActive: () => hasMark(this.view.state, 'strong'), context: 'text' },
+      { icon: toolbarIcons.italic, title: m.italic, action: () => run(this.view, toggleItalic()), isActive: () => hasMark(this.view.state, 'em'), context: 'text' },
+      { icon: toolbarIcons.underline, title: m.underline, action: () => run(this.view, toggleUnderline()), isActive: () => hasMark(this.view.state, 'underline'), context: 'text' },
+      { icon: toolbarIcons.strike, title: m.strikethrough, action: () => run(this.view, toggleStrike()), isActive: () => hasMark(this.view.state, 'strike'), context: 'text' },
+      { icon: toolbarIcons.inlineCode, title: m.inlineCode, action: () => run(this.view, toggleCode()), isActive: () => hasMark(this.view.state, 'code'), context: 'text' },
+      { icon: toolbarIcons.link, title: m.link, action: () => { this.openLinkEditor(); }, isActive: () => hasMark(this.view.state, 'link'), context: 'text' },
+      { icon: toolbarIcons.bulletList, title: m.bulletList, action: () => run(this.view, toggleBulletList()), isActive: () => isBlockActive(this.view.state, 'bullet_list'), context: 'text' },
+      { icon: toolbarIcons.orderedList, title: m.orderedList, action: () => run(this.view, toggleOrderedList()), isActive: () => isBlockActive(this.view.state, 'ordered_list'), context: 'text' },
+      { icon: toolbarIcons.quote, title: m.blockquote, action: () => run(this.view, toggleBlockquote()), isActive: () => isBlockActive(this.view.state, 'blockquote'), context: 'text' },
+      { icon: toolbarIcons.alt, title: m.editImageAlt, action: () => { this.onEditImageAlt?.(); }, isActive: () => false, context: 'image' }
     ];
   }
 
@@ -377,11 +380,10 @@ export class NotionUi implements EditorToolbarController {
       button.innerHTML = icon;
       button.title = title;
       button.setAttribute('aria-label', title);
-      button.addEventListener('mousedown', (event) => {
-        event.preventDefault();
+      onPress(button, () => {
         if (this.readOnly) return;
         action();
-        this.view.focus();
+        if (!this.linkEditor.isOpen) this.view.focus();
         this.sync();
       });
       this.bubbleButtons.push(button);
@@ -389,9 +391,8 @@ export class NotionUi implements EditorToolbarController {
     }
   }
 
-  private getBubbleContext(): 'text' | 'image' | 'link' {
+  private getBubbleContext(): 'text' | 'image' {
     if (isImageSelected(this.view.state)) return 'image';
-    if (isLinkAtCursor(this.view.state)) return 'link';
     return 'text';
   }
 
@@ -399,22 +400,27 @@ export class NotionUi implements EditorToolbarController {
     const { selection } = this.view.state;
     const shouldShow = !this.readOnly && !selection.empty && selection.from !== selection.to;
 
-    // Exit animation when hiding
+    // Exit animation when hiding. Only one pending hide handler at a time,
+    // and it is cancelled if the bubble is shown again before it fires —
+    // otherwise the next *enter* animation's `animationend` would hide it.
     if (!shouldShow) {
-      if (!this.bubble.hidden) {
+      if (!this.bubble.hidden && !this.bubbleHideHandler) {
         this.bubble.classList.add('oh-editor__bubble-toolbar--exit');
         const onAnimationEnd = () => {
-          this.bubble.classList.remove('oh-editor__bubble-toolbar--exit');
+          this.cancelBubbleHide();
           this.bubble.hidden = true;
-          this.bubble.removeEventListener('animationend', onAnimationEnd);
         };
+        this.bubbleHideHandler = onAnimationEnd;
         this.bubble.addEventListener('animationend', onAnimationEnd);
+        // Without animations (reduced motion, hidden tab) animationend may not fire.
+        if (typeof getComputedStyle === 'function' && ['', 'none'].includes(getComputedStyle(this.bubble).animationName)) {
+          onAnimationEnd();
+        }
       }
       return;
     }
 
-    // Remove exit class when showing
-    this.bubble.classList.remove('oh-editor__bubble-toolbar--exit');
+    this.cancelBubbleHide();
 
     this.ensureBubbleDom();
     const context = this.getBubbleContext();
@@ -424,10 +430,7 @@ export class NotionUi implements EditorToolbarController {
       const action = this.bubbleActions[i];
       const button = this.bubbleButtons[i];
 
-      let visible = false;
-      if (context === 'image') visible = action.context === 'image';
-      else if (context === 'link') visible = action.context === 'text';
-      else visible = action.context === 'text';
+      const visible = action.context === context;
 
       button.hidden = !visible;
       if (visible) {
@@ -446,6 +449,14 @@ export class NotionUi implements EditorToolbarController {
       centerX: true,
       offsetY: -this.bubble.offsetHeight - 12
     });
+  }
+
+  private cancelBubbleHide() {
+    if (this.bubbleHideHandler) {
+      this.bubble.removeEventListener('animationend', this.bubbleHideHandler);
+      this.bubbleHideHandler = null;
+    }
+    this.bubble.classList.remove('oh-editor__bubble-toolbar--exit');
   }
 
   private syncCodeLanguage() {
@@ -488,20 +499,24 @@ export class NotionUi implements EditorToolbarController {
   }
 
   private createSlashItems(options: NotionUiOptions): SlashItem[] {
+    const m = this.messages;
+    const heading = (level: 1 | 2 | 3) => formatMessage(m.heading, { level });
+    // Keywords stay multilingual so `/제목`, `/标题` and `/heading` all work
+    // regardless of the UI language; labels follow `messages`.
     const items: SlashItem[] = [
-      { icon: toolbarIcons.paragraph, label: 'Text', description: 'Start writing with a plain paragraph', category: 'Basic', keywords: ['paragraph', 'text', '텍스트', '본문', '문단'], run: () => run(this.view, insertParagraph()) },
-      { icon: toolbarIcons.heading1, label: 'Heading 1', description: 'Large section heading', category: 'Basic', keywords: ['h1', 'heading', 'title', '제목1', '큰제목', '표제'], run: () => run(this.view, setHeading(1)) },
-      { icon: toolbarIcons.heading2, label: 'Heading 2', description: 'Medium section heading', category: 'Basic', keywords: ['h2', 'heading', 'subtitle', '제목2', '중제목', '부제목'], run: () => run(this.view, setHeading(2)) },
-      { icon: toolbarIcons.heading3, label: 'Heading 3', description: 'Small section heading', category: 'Basic', keywords: ['h3', 'heading', '제목3', '소제목'], run: () => run(this.view, setHeading(3)) },
-      { icon: toolbarIcons.bulletList, label: 'Bullet List', description: 'Create an unordered list', category: 'Basic', keywords: ['list', 'bullet', '리스트', '목록', '글머리'], run: () => run(this.view, toggleBulletList()) },
-      { icon: toolbarIcons.orderedList, label: 'Ordered List', description: 'Create a numbered list', category: 'Basic', keywords: ['list', 'ordered', 'number', '번호', '숫자목록', '순서'], run: () => run(this.view, toggleOrderedList()) },
-      { icon: toolbarIcons.quote, label: 'Blockquote', description: 'Highlight a quoted passage', category: 'Basic', keywords: ['quote', '인용', '인용구', '블록인용'], run: () => run(this.view, toggleBlockquote()) },
-      { icon: toolbarIcons.codeBlock, label: 'Code Block', description: 'Insert a fenced code block', category: 'Advanced', keywords: ['code', 'snippet', '코드', '코드블록', '소스'], run: () => run(this.view, insertCodeBlock()) },
-      { icon: toolbarIcons.divider, label: 'Divider', description: 'Insert a horizontal divider', category: 'Advanced', keywords: ['hr', 'divider', 'separator', '구분선', '가로줄', '분할'], run: () => run(this.view, insertHR()) }
+      { icon: toolbarIcons.paragraph, label: m.slashText, description: m.slashTextDescription, category: 'basic', keywords: ['paragraph', 'text', '텍스트', '본문', '문단', '文本', '段落'], run: () => run(this.view, insertParagraph()) },
+      { icon: toolbarIcons.heading1, label: heading(1), description: m.slashHeading1Description, category: 'basic', keywords: ['h1', 'heading', 'title', '제목', '제목1', '큰제목', '표제', '标题', '标题1'], run: () => run(this.view, setHeading(1)) },
+      { icon: toolbarIcons.heading2, label: heading(2), description: m.slashHeading2Description, category: 'basic', keywords: ['h2', 'heading', 'subtitle', '제목', '제목2', '중제목', '부제목', '标题', '标题2'], run: () => run(this.view, setHeading(2)) },
+      { icon: toolbarIcons.heading3, label: heading(3), description: m.slashHeading3Description, category: 'basic', keywords: ['h3', 'heading', '제목', '제목3', '소제목', '标题', '标题3'], run: () => run(this.view, setHeading(3)) },
+      { icon: toolbarIcons.bulletList, label: m.bulletList, description: m.slashBulletListDescription, category: 'basic', keywords: ['list', 'bullet', 'ul', '리스트', '목록', '글머리', '列表', '无序'], run: () => run(this.view, toggleBulletList()) },
+      { icon: toolbarIcons.orderedList, label: m.orderedList, description: m.slashOrderedListDescription, category: 'basic', keywords: ['list', 'ordered', 'number', 'ol', '번호', '숫자목록', '순서', '列表', '有序', '编号'], run: () => run(this.view, toggleOrderedList()) },
+      { icon: toolbarIcons.quote, label: m.blockquote, description: m.slashBlockquoteDescription, category: 'basic', keywords: ['quote', 'blockquote', '인용', '인용구', '블록인용', '引用'], run: () => run(this.view, toggleBlockquote()) },
+      { icon: toolbarIcons.codeBlock, label: m.codeBlock, description: m.slashCodeBlockDescription, category: 'advanced', keywords: ['code', 'snippet', '코드', '코드블록', '소스', '代码'], run: () => run(this.view, insertCodeBlock()) },
+      { icon: toolbarIcons.divider, label: m.slashDivider, description: m.slashDividerDescription, category: 'advanced', keywords: ['hr', 'divider', 'separator', '구분선', '가로줄', '분할', '分割线', '分隔'], run: () => run(this.view, insertHR()) }
     ];
 
     if (options.onPickImage) {
-      items.push({ icon: toolbarIcons.image, label: 'Image', description: 'Upload an image from your device', category: 'Media', keywords: ['image', 'upload', 'media', '이미지', '사진', '그림', '업로드'], run: () => options.onPickImage?.() });
+      items.push({ icon: toolbarIcons.image, label: m.slashImage, description: m.slashImageDescription, category: 'media', keywords: ['image', 'upload', 'media', 'picture', '이미지', '사진', '그림', '업로드', '图片', '上传'], run: () => options.onPickImage?.() });
     }
 
     // If insertActions include a table insert action, show a Table slash item
@@ -510,10 +525,10 @@ export class NotionUi implements EditorToolbarController {
     if (tableInsertAction) {
       items.push({
         icon: toolbarIcons.table,
-        label: 'Table',
-        description: 'Insert a table with custom rows and columns',
-        category: 'Advanced',
-        keywords: ['table', 'grid', 'rows', 'columns', '표', '테이블', '그리드', '행', '열'],
+        label: m.slashTable,
+        description: m.slashTableDescription,
+        category: 'advanced',
+        keywords: ['table', 'grid', 'rows', 'columns', '표', '테이블', '그리드', '행', '열', '表格'],
         run: () => this.openGridPicker()
       });
     }
@@ -524,12 +539,23 @@ export class NotionUi implements EditorToolbarController {
         icon: action.label,
         label: action.title,
         description: action.title,
-        category: 'Advanced',
+        category: 'advanced',
         keywords: [action.title.toLowerCase()],
         run: () => action.run(this.view)
       });
     }
-    return items;
+
+    // Group by category so each heading is rendered once.
+    const order: SlashCategory[] = ['basic', 'media', 'advanced'];
+    return items
+      .map((item, index) => ({ item, index }))
+      .sort((a, b) => order.indexOf(a.item.category) - order.indexOf(b.item.category) || a.index - b.index)
+      .map(({ item }) => item);
+  }
+
+  private categoryLabel(category: SlashCategory) {
+    const m = this.messages;
+    return category === 'basic' ? m.slashCategoryBasic : category === 'media' ? m.slashCategoryMedia : m.slashCategoryAdvanced;
   }
 
   private getVisibleSlashItems() {
@@ -537,23 +563,38 @@ export class NotionUi implements EditorToolbarController {
     if (!match || this.readOnly) return [];
 
     const query = match.query.trim().toLowerCase();
-    const queryChoseong = getChoseong(query);
+    // Initial-consonant search ("ㅈㅁ" -> "제목") only for queries made of jamo.
+    const isChoseongQuery = /^[ㄱ-ㅎ]+$/.test(query);
     return this.slashItems.filter((item) => {
       if (!query) return true;
       return item.label.toLowerCase().includes(query)
         || item.keywords.some((word) => word.includes(query))
-        || item.keywords.some((word) => getChoseong(word).includes(queryChoseong));
+        || (isChoseongQuery && item.keywords.some((word) => getChoseong(word).includes(query)));
     });
+  }
+
+  private isSlashOpen() {
+    return !this.slash.hidden;
   }
 
   private syncSlash() {
     const match = getSlashMatch(this.view.state);
     const visibleItems = this.getVisibleSlashItems();
 
-    if (!match || !visibleItems.length || this.readOnly) {
+    if (match?.from !== this.dismissedSlashFrom) {
+      this.dismissedSlashFrom = null;
+    }
+
+    if (!match || !visibleItems.length || this.readOnly || this.dismissedSlashFrom !== null) {
       this.hideSlashMenu();
       return;
     }
+
+    // Start from the first item whenever the menu opens or the query changes.
+    if (!this.isSlashOpen() || match.query !== this.slashQuery) {
+      this.selectedSlashIndex = 0;
+    }
+    this.slashQuery = match.query;
 
     if (shouldUseBottomSheet()) {
       this.openSlashSheet();
@@ -569,6 +610,8 @@ export class NotionUi implements EditorToolbarController {
 
     this.selectedSlashIndex = Math.min(this.selectedSlashIndex, visibleItems.length - 1);
     this.renderSlashItems();
+    this.view.dom.setAttribute('aria-controls', this.slashList.id);
+    this.view.dom.setAttribute('aria-expanded', 'true');
   }
 
   private renderSlashItems() {
@@ -578,35 +621,43 @@ export class NotionUi implements EditorToolbarController {
     const match = getSlashMatch(this.view.state);
     const query = match?.query.trim().toLowerCase() ?? '';
     let lastCategory = '';
+    let activeButton: HTMLButtonElement | null = null;
 
     visibleItems.forEach((item, index) => {
       if (item.category !== lastCategory) {
         lastCategory = item.category;
         const header = document.createElement('div');
         header.className = 'oh-editor__slash-category';
-        header.textContent = item.category;
+        header.setAttribute('role', 'presentation');
+        header.textContent = this.categoryLabel(item.category);
         this.slashList.append(header);
       }
 
+      const active = index === this.selectedSlashIndex;
       const button = document.createElement('button');
       const icon = document.createElement('span');
       const copy = document.createElement('span');
       const label = document.createElement('span');
       button.type = 'button';
+      button.tabIndex = -1;
+      button.id = `${this.slashList.id}-${index}`;
       button.className = 'oh-editor__slash-item';
-      button.dataset.active = index === this.selectedSlashIndex ? 'true' : 'false';
+      button.setAttribute('role', 'option');
+      button.setAttribute('aria-selected', String(active));
+      button.dataset.active = active ? 'true' : 'false';
       icon.className = 'oh-editor__slash-item-icon';
+      icon.setAttribute('aria-hidden', 'true');
       icon.innerHTML = item.icon;
       copy.className = 'oh-editor__slash-item-copy';
       label.className = 'oh-editor__slash-item-label';
       copy.append(label);
 
-      if (query && item.label.toLowerCase().includes(query)) {
-        const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        label.innerHTML = item.label.replace(
-          new RegExp(`(${escaped})`, 'i'),
-          '<mark class="oh-editor__slash-item-highlight">$1</mark>'
-        );
+      const matchIndex = query ? item.label.toLowerCase().indexOf(query) : -1;
+      if (matchIndex >= 0) {
+        const highlight = document.createElement('mark');
+        highlight.className = 'oh-editor__slash-item-highlight';
+        highlight.textContent = item.label.slice(matchIndex, matchIndex + query.length);
+        label.append(item.label.slice(0, matchIndex), highlight, item.label.slice(matchIndex + query.length));
       } else {
         label.textContent = item.label;
       }
@@ -619,12 +670,17 @@ export class NotionUi implements EditorToolbarController {
       }
 
       button.append(icon, copy);
-      button.addEventListener('mousedown', (event) => {
-        event.preventDefault();
+      onPress(button, () => {
         void this.applySlashItem(item);
       });
       this.slashList.append(button);
+      if (active) activeButton = button;
     });
+
+    if (activeButton) {
+      this.view.dom.setAttribute('aria-activedescendant', (activeButton as HTMLButtonElement).id);
+      (activeButton as HTMLButtonElement).scrollIntoView?.({ block: 'nearest' });
+    }
   }
 
   private async applySlashItem(item: SlashItem | null) {
@@ -635,14 +691,19 @@ export class NotionUi implements EditorToolbarController {
       this.view.dispatch(this.view.state.tr.delete(match.from, match.to));
     }
 
-    await item.run();
-    this.view.focus();
     this.hideSlashMenu();
+    await item.run();
+    // The table grid picker takes focus for keyboard selection; leave it there.
+    if (!this.gridPicker) this.view.focus();
     this.sync();
   }
 
   private hideSlashMenu() {
     this.slash.hidden = true;
+    this.slashQuery = null;
+    this.view.dom.removeAttribute('aria-activedescendant');
+    this.view.dom.removeAttribute('aria-controls');
+    this.view.dom.setAttribute('aria-expanded', 'false');
     this.closeSlashSheet();
     this.attachSlashToPopup();
   }
@@ -679,6 +740,14 @@ export class NotionUi implements EditorToolbarController {
 
   private openSlashSheet() {
     this.ensureSlashSheetElements();
+
+    // The sheet lives on <body>; carry over a theme set on an ancestor of the
+    // editor (e.g. a demo container with data-theme="dark").
+    const theme = this.view.dom.closest('[data-theme]')?.getAttribute('data-theme');
+    for (const element of [this.slashSheet, this.slashBackdrop]) {
+      if (theme) element.dataset.theme = theme;
+      else delete element.dataset.theme;
+    }
 
     if (this.slash.parentElement !== this.slashSheet) {
       this.slash.classList.add('oh-editor__slash-menu--mobile');

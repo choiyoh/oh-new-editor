@@ -132,6 +132,25 @@ core stylesheet를 import한 뒤 토큰을 override하면 됩니다.
 }
 ```
 
+조상 요소에 `data-theme="dark"`를 지정하면 다크 팔레트가, `data-theme="system"`을 지정하면 OS 설정을 따릅니다.
+
+## 다국어
+
+내장 UI는 기본적으로 영어 문자열을 사용합니다. 프리셋이나 일부 문자열만 바꿔서 전달할 수 있습니다.
+
+```ts
+import { createEditor, messagesKo } from '@oh-new-editor/core';
+
+createEditor(element, { messages: messagesKo });
+createEditor(element, { messages: { bold: '진하게' } });
+```
+
+프리셋: `messagesKo`, `messagesZhCN`. 슬래시 명령 검색은 UI 언어와 관계없이 영어·한국어(`ㅈㅁ` 같은 초성 포함)·중국어 키워드를 모두 인식합니다.
+
+## 접근성
+
+툴바, 버블 메뉴, 표 메뉴, 링크 편집기는 키보드로 조작할 수 있습니다. 툴바는 탭 정지 하나에 방향키 이동을 쓰고, 버튼은 Enter/Space로 실행되며, 표 셀 안에서 Shift+F10 / 메뉴 키로 표 메뉴를 열 수 있습니다.
+
 ## 개발
 
 ```bash

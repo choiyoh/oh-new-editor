@@ -14,7 +14,7 @@
     },
     "markdownSupport": {
       "title": "마크다운 지원",
-      "description": "마크다운으로 작성하고 리치 텍스트로 렌더링. 완전한 양방향 변환 지원.",
+      "description": "마크다운을 리치 텍스트로 파싱하고 다시 직렬화합니다. GFM 표를 지원하며 손실되는 경우는 문서로 정리돼 있습니다.",
       "badge": "플러그인"
     },
     "tableEditing": {
@@ -24,12 +24,12 @@
     },
     "notionStyle": {
       "title": "Notion 스타일 UI",
-      "description": "슬래시 커맨드, 블록 메뉴, 드래그 핸들 — Notion에서 영감을 받은 편집 경험.",
+      "description": "키보드로 탐색 가능한 슬래시 명령과 떠 있는 버블 툴바로 가볍게 쓰는 노션 스타일 편집 흐름.",
       "badge": "플러그인"
     },
     "aiReady": {
       "title": "AI 지원",
-      "description": "자동완성, 번역, 요약 등 AI 기능을 위한 확장 가능한 아키텍처.",
+      "description": "직접 연결한 AI 백엔드용 훅: 생성된 텍스트를 문서에 스트리밍하고 깔끔하게 취소할 수 있습니다.",
       "badge": "플러그인"
     }
   },

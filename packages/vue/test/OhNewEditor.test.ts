@@ -23,3 +23,17 @@ describe('OhNewEditor (Vue)', () => {
     expect(proseMirror.text()).toContain('Hello Vue');
   });
 });
+
+describe('OhNewEditor (Vue) value sync', () => {
+  it('defers a value received while focused until blur', async () => {
+    const wrapper = mount(OhNewEditor, { props: { modelValue: '<p>one</p>' } });
+    const dom = wrapper.find('.ProseMirror').element as HTMLElement;
+
+    dom.dispatchEvent(new FocusEvent('focus'));
+    await wrapper.setProps({ modelValue: '<p>two</p>' });
+    expect(wrapper.find('.ProseMirror').text()).toBe('one');
+
+    dom.dispatchEvent(new FocusEvent('blur'));
+    expect(wrapper.find('.ProseMirror').text()).toBe('two');
+  });
+});

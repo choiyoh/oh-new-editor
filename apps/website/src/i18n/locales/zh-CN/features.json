@@ -14,7 +14,7 @@
     },
     "markdownSupport": {
       "title": "Markdown 支持",
-      "description": "用 Markdown 编写，以富文本呈现。支持完整语法的双向转换。",
+      "description": "将 Markdown 解析为富文本并可序列化回去，支持 GFM 表格。有损转换的情况已在文档中说明。",
       "badge": "插件"
     },
     "tableEditing": {
@@ -24,12 +24,12 @@
     },
     "notionStyle": {
       "title": "Notion 风格 UI",
-      "description": "斜杠命令、块菜单、拖拽手柄 — 受 Notion 启发的编辑体验，开箱即用。",
+      "description": "支持键盘导航的斜杠命令与浮动气泡工具栏，带来更轻量的 Notion 风格写作体验。",
       "badge": "插件"
     },
     "aiReady": {
       "title": "AI 就绪",
-      "description": "为 AI 功能设计的可扩展架构：自动补全、翻译、摘要等。",
+      "description": "对接你自己的 AI 后端的钩子：将生成的文本流式写入文档，并可干净地取消。",
       "badge": "插件"
     }
   },

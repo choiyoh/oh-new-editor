@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useSiteTheme } from '../../hooks/useSiteTheme';
 
 const sunIcon = (
   <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -23,32 +23,16 @@ const moonIcon = (
 );
 
 export function ThemeToggle() {
-  const [isDark, setIsDark] = useState(false);
-
-  useEffect(() => {
-    const root = document.documentElement;
-    const stored = localStorage.getItem('theme');
-    const prefersDark = window.matchMedia(
-      '(prefers-color-scheme: dark)',
-    ).matches;
-    const dark = stored ? stored === 'dark' : prefersDark;
-
-    setIsDark(dark);
-    if (dark) root.classList.add('dark');
-    else root.classList.remove('dark');
-  }, []);
+  // index.html applies the initial theme before paint; read it from there.
+  const isDark = useSiteTheme();
 
   const toggle = () => {
-    const root = document.documentElement;
     const next = !isDark;
-
-    setIsDark(next);
-    if (next) {
-      root.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
-    } else {
-      root.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
+    document.documentElement.classList.toggle('dark', next);
+    try {
+      localStorage.setItem('theme', next ? 'dark' : 'light');
+    } catch {
+      // Storage can be unavailable (private mode); the toggle still works.
     }
   };
 
@@ -57,6 +41,7 @@ export function ThemeToggle() {
       type="button"
       onClick={toggle}
       aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+      aria-pressed={isDark}
       className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
     >
       {isDark ? sunIcon : moonIcon}

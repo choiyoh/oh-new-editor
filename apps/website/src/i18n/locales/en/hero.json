@@ -6,8 +6,10 @@
   "primaryCta": "Get Started",
   "secondaryCta": "View on GitHub",
   "stats": {
-    "stars": "GitHub Stars",
-    "downloads": "npm Downloads",
-    "frameworks": "Frameworks"
-  }
+    "modules": "Opt-in modules",
+    "frameworks": "Framework adapters",
+    "license": "Open source license"
+  },
+  "cardDemo": "Try the demo",
+  "cardDocs": "Read the docs"
 }

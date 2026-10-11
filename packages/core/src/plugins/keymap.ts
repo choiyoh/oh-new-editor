@@ -1,7 +1,8 @@
+import type { Schema } from 'prosemirror-model';
 import { baseKeymap, chainCommands, exitCode } from 'prosemirror-commands';
 import { keymap } from 'prosemirror-keymap';
 import { redo, undo } from 'prosemirror-history';
-import { liftListItem, sinkListItem } from 'prosemirror-schema-list';
+import { liftListItem, sinkListItem, splitListItem } from 'prosemirror-schema-list';
 
 import {
   insertCodeBlock,
@@ -18,7 +19,9 @@ import {
 } from '../commands';
 import { editorSchema } from '../schema';
 
-export function createKeymapPlugin() {
+export function createKeymapPlugin(schema: Schema = editorSchema) {
+  const listItem = schema.nodes.list_item;
+
   return keymap({
     'Mod-b': toggleBold(),
     'Mod-i': toggleItalic(),
@@ -36,9 +39,8 @@ export function createKeymapPlugin() {
     'Mod-z': undo,
     'Shift-Mod-z': redo,
     'Mod-y': redo,
-    Tab: sinkListItem(editorSchema.nodes.list_item),
-    'Shift-Tab': liftListItem(editorSchema.nodes.list_item),
-    Enter: chainCommands(exitCode, baseKeymap.Enter)
+    ...(listItem ? { Tab: sinkListItem(listItem), 'Shift-Tab': liftListItem(listItem) } : {}),
+    Enter: listItem ? chainCommands(exitCode, splitListItem(listItem), baseKeymap.Enter) : chainCommands(exitCode, baseKeymap.Enter)
   });
 }
 

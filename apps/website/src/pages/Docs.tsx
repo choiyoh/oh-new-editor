@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { docsData } from '../data/docsData';
-import { cn } from '../lib/utils';
+import { usePathname } from '../hooks/usePathname';
+import { highlightCode } from '../lib/highlight';
+import { cn, navigate, prefersReducedMotion } from '../lib/utils';
 
 type Framework = 'vanilla' | 'react' | 'vue' | 'svelte';
 
@@ -10,24 +12,51 @@ export function Docs() {
   const currentLang = i18n.language.startsWith('ko') ? 'ko' : i18n.language.startsWith('zh') ? 'zh-CN' : 'en';
   const chapters = docsData[currentLang];
 
-  const [activeChapterId, setActiveChapterId] = useState(chapters[0]?.id || 'overview');
+  // The chapter lives in the URL (/docs/<chapter>) so it can be shared and
+  // the back button walks through chapters.
+  const pathname = usePathname();
+  const chapterFromPath = pathname.replace(/^\/docs\/?/, '').split('/')[0];
+  const activeChapter = chapters.find((c) => c.id === chapterFromPath) || chapters[0];
+  const activeChapterId = activeChapter?.id;
+
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeFramework, setActiveFramework] = useState<Framework>('vanilla');
-
-  // Sync state if language changes
-  useEffect(() => {
-    if (chapters.length > 0 && !chapters.some(c => c.id === activeChapterId)) {
-      setActiveChapterId(chapters[0].id);
-    }
-  }, [currentLang, chapters, activeChapterId]);
-
-  const activeChapter = chapters.find((c) => c.id === activeChapterId) || chapters[0];
+  const [activeSection, setActiveSection] = useState(0);
 
   const handleChapterSelect = (id: string) => {
-    setActiveChapterId(id);
     setMobileMenuOpen(false);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (id !== activeChapterId) navigate(`/docs/${id}`);
+    window.scrollTo({ top: 0, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
   };
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMobileMenuOpen(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [mobileMenuOpen]);
+
+  useEffect(() => {
+    if (activeChapter) document.title = `${activeChapter.title} · Oh New Editor Docs`;
+  }, [activeChapter]);
+
+  // Highlight the "On this page" entry for the section being read.
+  useEffect(() => {
+    setActiveSection(0);
+    if (typeof IntersectionObserver === 'undefined') return;
+    const sections = Array.from(document.querySelectorAll<HTMLElement>('[data-doc-section]'));
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.filter((entry) => entry.isIntersecting);
+        if (visible.length) setActiveSection(Number((visible[0].target as HTMLElement).dataset.docSection));
+      },
+      { rootMargin: '-96px 0px -60% 0px' },
+    );
+    sections.forEach((section) => observer.observe(section));
+    return () => observer.disconnect();
+  }, [activeChapterId, currentLang]);
 
   const frameworks: Array<{ id: Framework; name: string }> = [
     { id: 'vanilla', name: 'Vanilla JS' },
@@ -40,19 +69,31 @@ export function Docs() {
     <div className="relative mx-auto flex max-w-7xl gap-8 px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
       {/* Mobile Menu Toggle Button */}
       <button
+        type="button"
         onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-        className="fixed bottom-6 right-6 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-brand-600 text-white shadow-lg shadow-brand-500/30 transition-transform active:scale-95 lg:hidden animate-bounce"
-        aria-label="Toggle Menu"
+        className="fixed bottom-6 right-6 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-brand-600 text-white shadow-lg shadow-brand-500/30 transition-transform active:scale-95 lg:hidden"
+        aria-label={t('nav.docs')}
+        aria-expanded={mobileMenuOpen}
+        aria-controls="docs-sidebar"
       >
         <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" />
         </svg>
       </button>
 
-      {/* Sidebar Navigation */}
+      {mobileMenuOpen && (
+        <div
+          className="fixed inset-0 top-16 z-40 bg-zinc-950/30 lg:hidden"
+          aria-hidden="true"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* Sidebar Navigation: below the fixed 4rem header on mobile. */}
       <aside
+        id="docs-sidebar"
         className={cn(
-          "fixed inset-y-0 left-0 z-30 w-64 transform border-r border-zinc-200/50 bg-white/80 p-6 transition-transform duration-300 ease-in-out dark:border-zinc-800/50 dark:bg-zinc-950/80 lg:sticky lg:top-24 lg:h-[calc(100vh-8rem)] lg:translate-x-0 lg:rounded-2xl lg:border lg:bg-white/40 lg:backdrop-blur-md lg:dark:bg-zinc-900/30",
+          "fixed bottom-0 left-0 top-16 z-50 flex w-72 max-w-[85vw] transform flex-col border-r border-zinc-200/50 bg-white p-6 shadow-xl transition-transform duration-300 ease-in-out motion-reduce:transition-none dark:border-zinc-800/50 dark:bg-zinc-950 lg:sticky lg:top-24 lg:z-auto lg:h-[calc(100vh-8rem)] lg:w-64 lg:translate-x-0 lg:rounded-2xl lg:border lg:bg-white/40 lg:shadow-none lg:backdrop-blur-md lg:dark:bg-zinc-900/30",
           mobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}
       >
@@ -61,7 +102,9 @@ export function Docs() {
             {t('nav.docs')}
           </span>
           <button
+            type="button"
             onClick={() => setMobileMenuOpen(false)}
+            aria-label="Close"
             className="rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
           >
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -70,11 +113,17 @@ export function Docs() {
           </button>
         </div>
 
-        <nav className="flex flex-col gap-1.5 overflow-y-auto">
+        <nav className="flex min-h-0 flex-col gap-1.5 overflow-y-auto" aria-label={t('nav.docs')}>
           {chapters.map((chapter) => (
-            <button
+            <a
               key={chapter.id}
-              onClick={() => handleChapterSelect(chapter.id)}
+              href={`/docs/${chapter.id}`}
+              aria-current={activeChapterId === chapter.id ? 'page' : undefined}
+              onClick={(event) => {
+                if (event.metaKey || event.ctrlKey) return;
+                event.preventDefault();
+                handleChapterSelect(chapter.id);
+              }}
               className={cn(
                 "w-full rounded-xl px-4 py-3 text-left text-sm font-medium transition-all duration-200",
                 activeChapterId === chapter.id
@@ -83,7 +132,7 @@ export function Docs() {
               )}
             >
               {chapter.title}
-            </button>
+            </a>
           ))}
         </nav>
       </aside>
@@ -108,7 +157,7 @@ export function Docs() {
                 const activeCode = section.codes ? section.codes[activeFramework] : section.code;
 
                 return (
-                  <section key={idx} className="scroll-mt-24 group/section" id={`section-${idx}`}>
+                  <section key={idx} className="scroll-mt-24 group/section" id={`section-${idx}`} data-doc-section={idx}>
                     <div className="flex flex-wrap items-center justify-between gap-4">
                       <h2 className="font-display text-xl font-bold text-zinc-900 dark:text-zinc-100 sm:text-2xl group-hover/section:text-brand-600 dark:group-hover/section:text-brand-400 transition-colors duration-200">
                         {section.title}
@@ -120,6 +169,8 @@ export function Docs() {
                           {frameworks.map((fw) => (
                             <button
                               key={fw.id}
+                              type="button"
+                              aria-pressed={activeFramework === fw.id}
                               onClick={() => setActiveFramework(fw.id)}
                               className={cn(
                                 "rounded-full px-3 py-1 text-xs font-semibold transition-all duration-200",
@@ -190,9 +241,13 @@ export function Docs() {
               href={`#section-${idx}`}
               onClick={(e) => {
                 e.preventDefault();
-                document.getElementById(`section-${idx}`)?.scrollIntoView({ behavior: 'smooth' });
+                document.getElementById(`section-${idx}`)?.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
               }}
-              className="text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors"
+              aria-current={activeSection === idx ? 'location' : undefined}
+              className={cn(
+                "text-xs font-medium transition-colors hover:text-zinc-900 dark:hover:text-zinc-100",
+                activeSection === idx ? "text-brand-600 dark:text-brand-400" : "text-zinc-500 dark:text-zinc-400"
+              )}
             >
               {section.title}
             </a>
@@ -206,59 +261,27 @@ export function Docs() {
 function CodeBlock({ code }: { code: string }) {
   const [copied, setCopied] = useState(false);
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  // Syntax highlighting helper function
-  const getHighlightedHtml = (codeStr: string) => {
-    let html = codeStr
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
-
-    // 1. Strings
-    html = html.replace(/(['"`])(.*?)\1/g, '<span class="text-rose-500 dark:text-amber-400">$1$2$1</span>');
-
-    // 2. Comments (// ...)
-    html = html.replace(/(\/\/.*)/g, '<span class="text-zinc-400 dark:text-zinc-600">$1</span>');
-
-    // 3. Keywords
-    const keywords = ['const', 'let', 'var', 'import', 'export', 'from', 'default', 'function', 'interface', 'class', 'return', 'type', 'as', 'await', 'async', 'new', 'if', 'else', 'throw', 'try', 'catch', 'readonly', 'extends'];
-    keywords.forEach(kw => {
-      const regex = new RegExp(`\\b${kw}\\b`, 'g');
-      html = html.replace(regex, `<span class="text-brand-600 dark:text-brand-400 font-semibold">${kw}</span>`);
-    });
-
-    // 4. Types
-    const types = ['string', 'boolean', 'void', 'number', 'HTMLElement', 'Editor', 'EditorOptions', 'EditorMarkdownSupport', 'EditorTableSupport', 'EditorToolbarSupport', 'EditorAIOptions', 'EditorAIController', 'File', 'Promise', 'Schema', 'Plugin', 'OhNewEditorRef'];
-    types.forEach(t => {
-      const regex = new RegExp(`\\b${t}\\b`, 'g');
-      html = html.replace(regex, `<span class="text-indigo-600 dark:text-indigo-300">${t}</span>`);
-    });
-
-    // 5. API Methods and hooks
-    const apis = ['createEditor', 'createMarkdownSupport', 'createTableSupport', 'createToolbarSupport', 'createNotionSupport', 'createEditorSchema', 'getContent', 'setContent', 'setOutputFormat', 'setReadOnly', 'setStyle', 'getStyle', 'on', 'off', 'destroy', 'focus', 'blur', 'insertTable', 'setHeading', 'toggleBold', 'toggleItalic', 'toggleUnderline', 'toggleStrike', 'toggleCode', 'insertCodeBlock', 'toggleBlockquote', 'toggleBulletList', 'toggleOrderedList', 'insertHR', 'insertParagraph', 'toggleLink', 'insertImage', 'liftCurrentListItem', 'sinkCurrentListItem', 'sanitizeHtml', 'isSafeHref', 'OhNewEditor', 'uploadImageFiles', 'generate', 'cancel', 'getContext'];
-    apis.forEach(api => {
-      const regex = new RegExp(`\\b${api}\\b`, 'g');
-      html = html.replace(regex, `<span class="text-emerald-600 dark:text-emerald-400 font-medium">${api}</span>`);
-    });
-
-    return html;
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
   };
 
   return (
     <div className="relative group mt-4">
       <button
+        type="button"
         onClick={handleCopy}
-        className="absolute right-3 top-3 rounded-lg border border-zinc-200 bg-white/80 px-2.5 py-1 text-xs font-semibold text-zinc-500 opacity-0 transition-opacity hover:bg-zinc-50 group-hover:opacity-100 dark:border-zinc-800 dark:bg-zinc-900/80 dark:text-zinc-400 dark:hover:bg-zinc-800 backdrop-blur-sm cursor-pointer shadow-sm active:scale-95"
+        className="absolute right-3 top-3 rounded-lg border border-zinc-200 bg-white/80 px-2.5 py-1 text-xs font-semibold text-zinc-600 transition-opacity hover:bg-zinc-50 focus-visible:opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 dark:border-zinc-800 dark:bg-zinc-900/80 dark:text-zinc-300 dark:hover:bg-zinc-800 backdrop-blur-sm cursor-pointer shadow-sm active:scale-95"
       >
-        {copied ? 'Copied!' : 'Copy'}
+        <span aria-live="polite">{copied ? 'Copied!' : 'Copy'}</span>
       </button>
       <pre className="overflow-x-auto rounded-xl border border-zinc-200/50 bg-zinc-50/30 p-4 font-mono text-xs text-zinc-800 dark:border-zinc-800/40 dark:bg-zinc-950/40 dark:text-zinc-300 backdrop-blur-[2px] leading-relaxed shadow-inner">
-        <code dangerouslySetInnerHTML={{ __html: getHighlightedHtml(code) }} />
+        <code dangerouslySetInnerHTML={{ __html: highlightCode(code) }} />
       </pre>
     </div>
   );

@@ -21,7 +21,7 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @oh-new-editor/core test
+      - run: pnpm test
       - run: pnpm typecheck
       - run: pnpm build
       - run: node scripts/check-size.mjs

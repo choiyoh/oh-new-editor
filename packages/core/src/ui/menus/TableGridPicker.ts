@@ -1,6 +1,7 @@
 import type { EditorView } from 'prosemirror-view';
 
 import { insertTable } from '../../commands';
+import { DEFAULT_MESSAGES, type EditorMessages } from '../../i18n';
 
 const MAX_GRID = 8;
 
@@ -14,11 +15,14 @@ export class TableGridPicker {
 
   constructor(
     private readonly view: EditorView,
-    private readonly limits?: { maxRows?: number; maxCols?: number }
+    private readonly limits?: { maxRows?: number; maxCols?: number },
+    private readonly messages: EditorMessages = DEFAULT_MESSAGES
   ) {
     this.element.className = 'oh-editor__grid-picker';
     this.element.hidden = true;
     this.element.tabIndex = -1;
+    this.element.setAttribute('role', 'dialog');
+    this.element.setAttribute('aria-label', this.messages.tablePickerLabel);
     this.render();
     this.element.addEventListener('keydown', this.handleKeyDown);
     document.addEventListener('mousedown', this.handleClickOutside, true);
@@ -101,6 +105,7 @@ export class TableGridPicker {
       case 'Escape':
         event.preventDefault();
         this.close();
+        this.view.focus();
         break;
     }
   };
@@ -142,6 +147,7 @@ export class TableGridPicker {
 
     const label = document.createElement('div');
     label.className = 'oh-editor__grid-picker-label';
+    label.setAttribute('aria-live', 'polite');
 
     this.element.append(grid, label);
     this.element.addEventListener('mouseleave', () => {
@@ -165,7 +171,7 @@ export class TableGridPicker {
     if (label) {
       label.textContent = this.hoveredRows > 0
         ? `${this.hoveredRows} × ${this.hoveredCols}`
-        : 'Select table size';
+        : this.messages.tablePickerHint;
     }
   }
 }

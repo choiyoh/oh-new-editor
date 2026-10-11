@@ -18,15 +18,11 @@
     "github": "GitHub",
     "npm": "npm",
     "changelog": "Changelog",
-    "community": "Community",
-    "discord": "Discord",
-    "twitter": "Twitter",
-    "blog": "Blog",
     "legal": "Legal",
-    "privacy": "Privacy Policy",
-    "terms": "Terms of Service",
     "license": "License",
-    "copyright": "© 2026 Oh New Editor. All rights reserved."
+    "copyright": "© 2026 Oh New Editor. Released under the MIT License.",
+    "issues": "Issues",
+    "releases": "Releases"
   },
   "cta": {
     "getStarted": "Get Started",
@@ -42,5 +38,9 @@
     "en": "English",
     "ko": "한국어",
     "zh-CN": "简体中文"
+  },
+  "meta": {
+    "title": "Oh New Editor — Framework-Agnostic Rich Text Editor Toolkit",
+    "description": "A headless, framework-agnostic rich text editor toolkit built on ProseMirror, with optional toolbar, Notion-style, table and markdown modules."
   }
 }

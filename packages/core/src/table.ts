@@ -32,6 +32,7 @@ function getTableSize(state: Parameters<NonNullable<EditorToolbarAction['isEnabl
 export function createTableSupport(options: { maxRows?: number; maxCols?: number } = {}): EditorTableSupport {
   const insertActions: EditorToolbarAction[] = [
     {
+      id: 'insertTable',
       label: toolbarIcons.table,
       title: 'Insert table',
       run: (view) => insertTable(3, 3, options)(view.state, view.dispatch, view)
@@ -40,6 +41,7 @@ export function createTableSupport(options: { maxRows?: number; maxCols?: number
 
   const tableActions: EditorToolbarAction[] = [
     {
+      id: 'addRowBelow',
       label: toolbarIcons.addRow,
       title: 'Add row after',
       run: (view) => addRowAfter(view.state, view.dispatch),
@@ -49,6 +51,7 @@ export function createTableSupport(options: { maxRows?: number; maxCols?: number
       }
     },
     {
+      id: 'addColumnRight',
       label: toolbarIcons.addColumn,
       title: 'Add column after',
       run: (view) => addColumnAfter(view.state, view.dispatch),
@@ -58,24 +61,28 @@ export function createTableSupport(options: { maxRows?: number; maxCols?: number
       }
     },
     {
+      id: 'deleteRow',
       label: toolbarIcons.removeRow,
       title: 'Delete row',
       run: (view) => deleteRow(view.state, view.dispatch),
       isEnabled: (state) => isInTable(state)
     },
     {
+      id: 'deleteColumn',
       label: toolbarIcons.removeColumn,
       title: 'Delete column',
       run: (view) => deleteColumn(view.state, view.dispatch),
       isEnabled: (state) => isInTable(state)
     },
     {
+      id: 'mergeCells',
       label: toolbarIcons.merge,
       title: 'Merge selected cells',
       run: (view) => mergeCells(view.state, view.dispatch),
       isEnabled: (state) => isInTable(state) && mergeCells(state)
     },
     {
+      id: 'splitCell',
       label: toolbarIcons.split,
       title: 'Split merged cell',
       run: (view) => splitCell(view.state, view.dispatch),
@@ -97,7 +104,7 @@ export function createTableSupport(options: { maxRows?: number; maxCols?: number
     ],
     insertActions,
     actions: tableActions,
-    createMenu: (view) => new TableMenu(view, options.maxRows, options.maxCols)
+    createMenu: (view, messages) => new TableMenu(view, options.maxRows, options.maxCols, messages)
   };
 }
 
