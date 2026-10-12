@@ -23,10 +23,13 @@ pnpm typecheck
 pnpm build
 node scripts/check-size.mjs
 node scripts/check-packages.mjs
+node scripts/check-release-script.mjs
 pnpm changeset status
 ```
 
 The package check packs all four libraries, verifies README/license/export files and rewritten workspace peers, installs the tarballs in isolated consumers, and checks React 18/19, Vue 3, Svelte 5, server imports/rendering, and TypeScript declarations. It requires registry access for consumer dependencies. It runs in CI and in the release workflow.
+
+The publish entrypoint is `node scripts/publish-packages.mjs`: it checks authentication, invokes `pnpm changeset publish`, and returns that command's exit status. Changesets does not evaluate shell operators in its `publish` input. `check-release-script.mjs` verifies the dispatch using a local stub and does not contact npm or publish anything.
 
 ## Release through Changesets
 
