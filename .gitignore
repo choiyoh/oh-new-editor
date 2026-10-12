@@ -6,6 +6,7 @@ node_modules
 AGENTS.md
 dist/
 .turbo/
+.svelte-kit/
 .playwright-mcp/
 .DS_Store
 *.log

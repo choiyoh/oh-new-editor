@@ -163,6 +163,10 @@ pnpm dev
 
 ## 참고
 
+배포 검증과 계정 설정은 [릴리스 가이드](./docs/RELEASING.md)를 참고하세요. CI는 소스 테스트 외에도 실제 배포용 tarball을 별도 소비자 프로젝트에 설치하여 검증합니다.
+
+서버에서도 패키지를 import할 수 있습니다. 편집기 생성과 HTML 처리는 브라우저 DOM이 필요합니다. React·Vue는 클라이언트에서 편집기를 생성하고, Svelte를 지원하는 번들러는 소스 export를 사용해 서버·클라이언트용으로 각각 컴파일합니다.
+
 - `@oh-new-editor/core`는 의도적으로 headless입니다.
 - Markdown 지원은 `@oh-new-editor/core/markdown`를 통해 opt-in 방식으로 제공됩니다.
 - 테이블 지원은 `@oh-new-editor/core/table`를 통해 opt-in 방식으로 제공됩니다.

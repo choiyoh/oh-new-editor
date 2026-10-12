@@ -25,3 +25,4 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm build
       - run: node scripts/check-size.mjs
+      - run: node scripts/check-packages.mjs

@@ -14,7 +14,8 @@ export default defineConfig({
     sourcemap: true,
     emptyOutDir: true,
     rollupOptions: {
-      external: ['svelte', '@oh-new-editor/core']
+      external: (id) => /^(svelte|@oh-new-editor\/core)(\/|$)/.test(id),
+      output: { exports: 'named' }
     }
   },
   plugins: [svelte()]

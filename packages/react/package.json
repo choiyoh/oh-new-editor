@@ -8,7 +8,7 @@
   ],
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
-  "types": "./dist/index.d.ts",
+  "types": "./dist/src/index.d.ts",
   "repository": {
     "type": "git",
     "url": "https://github.com/choiyoh/oh-new-editor.git",
@@ -23,7 +23,7 @@
   },
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
+      "types": "./dist/src/index.d.ts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
     }
@@ -53,6 +53,7 @@
     "vitest": "^3.2.4"
   },
   "author": "choiyoh",
+  "license": "MIT",
   "keywords": [
     "editor",
     "rich-text",
