@@ -42,9 +42,9 @@ export function DemoSection() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <SectionTitle title={t('title')} subtitle={t('subtitle')} />
 
-        <div className="mt-12 grid gap-6 lg:grid-cols-12 md:mt-16">
+        <div className="mt-12 grid grid-cols-1 gap-6 lg:grid-cols-12 md:mt-16">
           {/* Controls sidebar */}
-          <div className="lg:col-span-2">
+          <div className="min-w-0 lg:col-span-2">
             <div className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
               <div className="mb-4">
                 <span id="demo-mode-label" className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
@@ -89,7 +89,7 @@ export function DemoSection() {
           </div>
 
           {/* Editor */}
-          <div className="lg:col-span-6">
+          <div className="min-w-0 lg:col-span-6">
             {/* No overflow clipping here: menus and popovers extend past the editor. */}
             <div data-demo-container data-theme={demoTheme} className="rounded-2xl">
               <div ref={hostRef} className="min-h-[320px]" aria-label={t('title')} />
@@ -97,7 +97,7 @@ export function DemoSection() {
           </div>
 
           {/* Markdown Preview */}
-          <div className="lg:col-span-4">
+          <div className="min-w-0 lg:col-span-4">
             <div className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
               <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                 {t('previewLabel')}
