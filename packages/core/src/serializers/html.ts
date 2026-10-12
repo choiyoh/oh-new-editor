@@ -78,9 +78,15 @@ function createSanitizer() {
   return purify;
 }
 
-const sanitizer = createSanitizer();
+// Imports must also work during SSR. Bind DOMPurify only when HTML is actually
+// processed in the browser; the sanitization boundary remains mandatory.
+let sanitizer: ReturnType<typeof createSanitizer> | undefined;
 
 export function sanitizeHtml(html: string) {
+  if (typeof window === 'undefined') {
+    throw new Error('HTML sanitization requires a browser DOM. Process editor content on the client.');
+  }
+  sanitizer ??= createSanitizer();
   return sanitizer.sanitize(html, {
     ALLOWED_TAGS,
     ALLOWED_ATTR,

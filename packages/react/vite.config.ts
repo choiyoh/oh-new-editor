@@ -14,7 +14,8 @@ export default defineConfig({
     sourcemap: true,
     emptyOutDir: true,
     rollupOptions: {
-      external: ['react', 'react-dom', '@oh-new-editor/core']
+      external: (id) => /^(react|react-dom|@oh-new-editor\/core)(\/|$)/.test(id),
+      output: { banner: "'use client';" }
     }
   },
   plugins: [

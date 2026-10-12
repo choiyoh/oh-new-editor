@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { docsData } from '../data/docsData';
 import { usePathname } from '../hooks/usePathname';
@@ -6,6 +6,7 @@ import { highlightCode } from '../lib/highlight';
 import { cn, navigate, prefersReducedMotion } from '../lib/utils';
 
 type Framework = 'vanilla' | 'react' | 'vue' | 'svelte';
+const DESKTOP_QUERY = '(min-width: 1024px)';
 
 export function Docs() {
   const { i18n, t } = useTranslation('common');
@@ -20,6 +21,9 @@ export function Docs() {
   const activeChapterId = activeChapter?.id;
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(() => window.matchMedia(DESKTOP_QUERY).matches);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const menuToggleRef = useRef<HTMLButtonElement>(null);
   const [activeFramework, setActiveFramework] = useState<Framework>('vanilla');
   const [activeSection, setActiveSection] = useState(0);
 
@@ -30,13 +34,40 @@ export function Docs() {
   };
 
   useEffect(() => {
-    if (!mobileMenuOpen) return;
+    const media = window.matchMedia(DESKTOP_QUERY);
+    const update = () => {
+      setIsDesktop(media.matches);
+      if (media.matches) setMobileMenuOpen(false);
+    };
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+
+  useEffect(() => {
+    const sidebar = sidebarRef.current;
+    if (!mobileMenuOpen || isDesktop || !sidebar) return;
+    const focusable = () => Array.from(sidebar.querySelectorAll<HTMLElement>('button:not([disabled]), a[href]'));
+    focusable()[0]?.focus();
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setMobileMenuOpen(false);
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setMobileMenuOpen(false);
+      } else if (event.key === 'Tab') {
+        const items = focusable();
+        const first = items[0];
+        const last = items[items.length - 1];
+        if (!sidebar.contains(document.activeElement) || (event.shiftKey ? document.activeElement === first : document.activeElement === last)) {
+          event.preventDefault();
+          (event.shiftKey ? last : first)?.focus();
+        }
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [mobileMenuOpen]);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      if (!window.matchMedia(DESKTOP_QUERY).matches) menuToggleRef.current?.focus();
+    };
+  }, [mobileMenuOpen, isDesktop]);
 
   useEffect(() => {
     if (activeChapter) document.title = `${activeChapter.title} · Oh New Editor Docs`;
@@ -69,6 +100,7 @@ export function Docs() {
     <div className="relative mx-auto flex max-w-7xl gap-8 px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
       {/* Mobile Menu Toggle Button */}
       <button
+        ref={menuToggleRef}
         type="button"
         onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
         className="fixed bottom-6 right-6 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-brand-600 text-white shadow-lg shadow-brand-500/30 transition-transform active:scale-95 lg:hidden"
@@ -91,7 +123,10 @@ export function Docs() {
 
       {/* Sidebar Navigation: below the fixed 4rem header on mobile. */}
       <aside
+        ref={sidebarRef}
         id="docs-sidebar"
+        inert={!isDesktop && !mobileMenuOpen}
+        aria-hidden={!isDesktop && !mobileMenuOpen ? true : undefined}
         className={cn(
           "fixed bottom-0 left-0 top-16 z-50 flex w-72 max-w-[85vw] transform flex-col border-r border-zinc-200/50 bg-white p-6 shadow-xl transition-transform duration-300 ease-in-out motion-reduce:transition-none dark:border-zinc-800/50 dark:bg-zinc-950 lg:sticky lg:top-24 lg:z-auto lg:h-[calc(100vh-8rem)] lg:w-64 lg:translate-x-0 lg:rounded-2xl lg:border lg:bg-white/40 lg:shadow-none lg:backdrop-blur-md lg:dark:bg-zinc-900/30",
           mobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"

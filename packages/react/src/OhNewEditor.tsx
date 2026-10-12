@@ -94,7 +94,11 @@ export const OhNewEditor = forwardRef<Editor | null, OhNewEditorProps>(function 
   }, [editor, options?.outputFormat]);
 
   useEffect(() => {
-    if (!editor || value === undefined || value === currentValueRef.current) return;
+    if (!editor) return;
+    // Every incoming value supersedes the previous deferred update, including
+    // a return to the current document or a switch to uncontrolled mode.
+    pendingValueRef.current = undefined;
+    if (value === undefined || value === currentValueRef.current) return;
     if (isFocusedRef.current) {
       // Replacing content under the caret would jump the cursor; defer to blur.
       pendingValueRef.current = value;

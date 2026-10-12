@@ -170,6 +170,10 @@ pnpm --filter @oh-new-editor/core test
 pnpm dev
 ```
 
+For publishing validation and account setup, see [the release guide](./docs/RELEASING.md). CI tests the packed libraries in isolated consumer projects in addition to the source test suites.
+
+Imports support server rendering; editor creation and HTML processing require a browser DOM. React and Vue mount their editors on the client. Svelte-aware bundlers use the component source export for server/client compilation.
+
 ## Notes
 
 - `@oh-new-editor/core` is intentionally headless.

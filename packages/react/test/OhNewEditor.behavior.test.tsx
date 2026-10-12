@@ -7,6 +7,24 @@ import { OhNewEditor } from '../src/OhNewEditor';
 
 
 describe('OhNewEditor behaviour', () => {
+  it.each([
+    ['<p>one</p>', '<p>one</p>'],
+    [undefined, '<p>one</p>'],
+    ['<p>three</p>', '<p>three</p>'],
+  ])('uses the latest value %s when a deferred update is superseded', (latestValue, expected) => {
+    const ref = createRef<Editor | null>();
+    const { container, rerender } = render(<OhNewEditor ref={ref} value="<p>one</p>" />);
+    const dom = container.querySelector('.ProseMirror') as HTMLElement;
+
+    act(() => dom.dispatchEvent(new FocusEvent('focus')));
+    rerender(<OhNewEditor ref={ref} value="<p>two</p>" />);
+    rerender(<OhNewEditor ref={ref} value={latestValue} />);
+    expect(ref.current!.getContent('html')).toBe('<p>one</p>');
+
+    act(() => dom.dispatchEvent(new FocusEvent('blur')));
+    expect(ref.current!.getContent('html')).toBe(expected);
+  });
+
   it('exposes the editor instance through the forwarded ref', () => {
     const ref = createRef<Editor | null>();
     render(

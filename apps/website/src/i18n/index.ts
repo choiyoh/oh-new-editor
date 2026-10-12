@@ -50,7 +50,6 @@ i18n
     fallbackLng: 'en',
     // Map browser locales like ko-KR onto the bundled languages.
     supportedLngs: ['en', 'ko', 'zh-CN'],
-    nonExplicitSupportedLngs: true,
     defaultNS: 'common',
     interpolation: {
       escapeValue: false,

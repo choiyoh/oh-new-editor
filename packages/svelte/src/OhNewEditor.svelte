@@ -47,8 +47,10 @@
     editor = null;
   });
 
-  $: if (editor && value !== undefined && value !== currentValue) {
-    if (isFocused) {
+  $: if (editor) {
+    if (value === undefined || value === currentValue) {
+      pendingValue = undefined;
+    } else if (isFocused) {
       // Replacing content under the caret would jump the cursor; defer to blur.
       pendingValue = value;
     } else {
