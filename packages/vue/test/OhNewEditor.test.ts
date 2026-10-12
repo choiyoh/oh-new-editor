@@ -25,6 +25,24 @@ describe('OhNewEditor (Vue)', () => {
 });
 
 describe('OhNewEditor (Vue) value sync', () => {
+  it.each([
+    ['<p>one</p>', 'one'],
+    [undefined, 'one'],
+    ['<p>three</p>', 'three'],
+  ])('uses the latest value %s when a deferred update is superseded', async (latestValue, expected) => {
+    const wrapper = mount(OhNewEditor, { props: { modelValue: '<p>one</p>' } });
+    const dom = wrapper.find('.ProseMirror').element as HTMLElement;
+
+    dom.dispatchEvent(new FocusEvent('focus'));
+    await wrapper.setProps({ modelValue: '<p>two</p>' });
+    await wrapper.setProps({ modelValue: latestValue });
+    expect(dom.textContent).toBe('one');
+
+    dom.dispatchEvent(new FocusEvent('blur'));
+    expect(dom.textContent).toBe(expected);
+    wrapper.unmount();
+  });
+
   it('defers a value received while focused until blur', async () => {
     const wrapper = mount(OhNewEditor, { props: { modelValue: '<p>one</p>' } });
     const dom = wrapper.find('.ProseMirror').element as HTMLElement;

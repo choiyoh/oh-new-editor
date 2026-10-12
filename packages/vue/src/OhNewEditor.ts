@@ -81,7 +81,9 @@ export const OhNewEditor = defineComponent({
     watch(
       () => resolvedValue(),
       (value) => {
-        if (!editor.value || value === undefined || value === currentValue.value) return;
+        if (!editor.value) return;
+        pendingValue = undefined;
+        if (value === undefined || value === currentValue.value) return;
         if (isFocused.value) {
           // Replacing content under the caret would jump the cursor; defer to blur.
           pendingValue = value;
