@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { usePathname } from '../../hooks/usePathname';
-import { cn, handleSiteLinkClick, navigate, prefersReducedMotion } from '../../lib/utils';
+import { cn, handleSiteLinkClick } from '../../lib/utils';
+import { siteHref } from '../../lib/routing';
 import { Button } from '../ui/Button';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import { ThemeToggle } from './ThemeToggle';
@@ -71,12 +72,8 @@ export function Nav() {
       >
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <a
-            href="/"
-            onClick={(e) => {
-              e.preventDefault();
-              navigate('/');
-              window.scrollTo({ top: 0, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
-            }}
+            href={siteHref('/')}
+            onClick={(e) => handleSiteLinkClick(e, '/')}
             className="font-display text-xl font-bold text-zinc-900 dark:text-zinc-100"
           >
             Oh New Editor
@@ -88,7 +85,7 @@ export function Nav() {
               return (
                 <a
                   key={link.href}
-                  href={link.href}
+                  href={siteHref(link.href)}
                   aria-current={isActive ? 'page' : undefined}
                   onClick={(e) => handleLinkClick(e, link.href)}
                   className={cn(
@@ -137,7 +134,7 @@ export function Nav() {
                 return (
                   <a
                     key={link.href}
-                    href={link.href}
+                    href={siteHref(link.href)}
                     className={cn(
                       "text-base font-medium transition-colors",
                       isActive

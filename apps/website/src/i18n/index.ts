@@ -1,6 +1,7 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
+import { sitePathname } from '../lib/routing';
 
 import enCommon from './locales/en/common.json';
 import enHero from './locales/en/hero.json';
@@ -63,7 +64,7 @@ i18n
 // Keep <html lang>, the title and the description in sync with the language.
 function syncDocumentLanguage(lng: string) {
   document.documentElement.lang = lng;
-  if (!window.location.pathname.startsWith('/docs')) {
+  if (!sitePathname().startsWith('/docs')) {
     document.title = i18n.t('meta.title', { ns: 'common' });
   }
   document.querySelector('meta[name="description"]')?.setAttribute('content', i18n.t('meta.description', { ns: 'common' }));

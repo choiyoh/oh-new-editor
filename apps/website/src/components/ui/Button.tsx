@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { cn } from '../../lib/utils';
+import { siteHref } from '../../lib/routing';
 
 type ButtonProps = {
   variant?: 'primary' | 'secondary' | 'ghost';
@@ -17,6 +18,7 @@ export function Button({
   as: Component = 'button',
   className = '',
   children,
+  href,
   ...props
 }: ButtonProps) {
   const baseClasses =
@@ -46,6 +48,7 @@ export function Button({
         className,
       )}
       {...props}
+      {...(href ? { href: siteHref(href) } : {})}
     >
       {children}
     </Component>

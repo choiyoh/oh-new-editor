@@ -19,6 +19,31 @@ beforeEach(() => {
 });
 
 describe('docs navigation keyboard access', () => {
+  it('preserves the chapter in shared section links and scrolls after reload', () => {
+    vi.stubEnv('BASE_URL', '/oh-new-editor/');
+    vi.stubEnv('VITE_ROUTE_MODE', 'hash');
+    const scroll = vi.fn();
+    const descriptor = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollIntoView');
+    Object.defineProperty(Element.prototype, 'scrollIntoView', { configurable: true, value: scroll });
+    try {
+      window.history.replaceState({}, '', '/oh-new-editor/#/docs/overview#section-1');
+      const { container, unmount } = render(<Docs />);
+      expect(scroll).toHaveBeenCalled();
+      const link = container.querySelector('a[href="/oh-new-editor/#/docs/overview#section-1"]') as HTMLAnchorElement;
+      expect(link).not.toBeNull();
+      container.addEventListener('click', (event) => {
+        expect(event.defaultPrevented).toBe(false);
+        event.preventDefault(); // jsdom cannot open the native new tab.
+      }, { once: true });
+      fireEvent.click(link, { ctrlKey: true });
+      expect(window.location.hash).toBe('#/docs/overview#section-1');
+      unmount();
+    } finally {
+      if (descriptor) Object.defineProperty(Element.prototype, 'scrollIntoView', descriptor);
+      else Reflect.deleteProperty(Element.prototype, 'scrollIntoView');
+    }
+  });
+
   it('makes the closed mobile sidebar inert and restores focus after Escape', () => {
     const { container } = render(<Docs />);
     const sidebar = container.querySelector('#docs-sidebar') as HTMLElement;

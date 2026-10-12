@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { AnimatedSection } from '../AnimatedSection';
 import { handleSiteLinkClick } from '../../lib/utils';
+import { siteHref } from '../../lib/routing';
 import { REPO_URL } from '../../lib/site';
 import { Button } from '../ui/Button';
 
@@ -112,7 +113,7 @@ export function Hero() {
                   {t('cardDemo')}
                 </a>
                 <a
-                  href="/docs"
+                  href={siteHref('/docs')}
                   onClick={(event) => handleSiteLinkClick(event, '/docs')}
                   className="flex h-8 flex-1 items-center justify-center rounded-lg bg-zinc-100 text-xs font-semibold text-zinc-600 transition-colors hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
                 >

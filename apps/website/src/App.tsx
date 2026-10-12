@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Nav } from './components/layout/Nav';
 import { Footer } from './components/layout/Footer';
@@ -14,6 +14,9 @@ const DemoSection = lazy(() => import('./components/sections/DemoSection').then(
 export default function App() {
   const { t } = useTranslation('common');
   const isDocs = usePathname().startsWith('/docs');
+  useEffect(() => {
+    if (!isDocs) document.title = t('meta.title');
+  }, [isDocs, t]);
 
   return (
     <div className="min-h-screen bg-white text-zinc-900 dark:bg-[#09090b] dark:text-zinc-100">

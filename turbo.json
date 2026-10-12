@@ -3,6 +3,7 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
+      "env": ["VITE_BASE_PATH", "VITE_ROUTE_MODE"],
       "outputs": ["dist/**"]
     },
     "dev": {
