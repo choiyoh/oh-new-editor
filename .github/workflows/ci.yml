@@ -26,3 +26,4 @@ jobs:
       - run: pnpm build
       - run: node scripts/check-size.mjs
       - run: node scripts/check-packages.mjs
+      - run: node scripts/check-release-script.mjs
