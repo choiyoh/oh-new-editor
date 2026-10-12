@@ -4,6 +4,7 @@ import { docsData } from '../data/docsData';
 import { usePathname } from '../hooks/usePathname';
 import { highlightCode } from '../lib/highlight';
 import { cn, navigate, prefersReducedMotion } from '../lib/utils';
+import { siteHref } from '../lib/routing';
 
 type Framework = 'vanilla' | 'react' | 'vue' | 'svelte';
 const DESKTOP_QUERY = '(min-width: 1024px)';
@@ -72,6 +73,21 @@ export function Docs() {
   useEffect(() => {
     if (activeChapter) document.title = `${activeChapter.title} · Oh New Editor Docs`;
   }, [activeChapter]);
+
+  // Hash routes contain a second fragment for a shared document section.
+  useEffect(() => {
+    const scrollToSection = () => {
+      const section = /#(section-\d+)$/.exec(window.location.hash)?.[1];
+      if (section) document.getElementById(section)?.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+    };
+    scrollToSection();
+    window.addEventListener('hashchange', scrollToSection);
+    window.addEventListener('popstate', scrollToSection);
+    return () => {
+      window.removeEventListener('hashchange', scrollToSection);
+      window.removeEventListener('popstate', scrollToSection);
+    };
+  }, [activeChapterId, currentLang]);
 
   // Highlight the "On this page" entry for the section being read.
   useEffect(() => {
@@ -152,10 +168,10 @@ export function Docs() {
           {chapters.map((chapter) => (
             <a
               key={chapter.id}
-              href={`/docs/${chapter.id}`}
+              href={siteHref(`/docs/${chapter.id}`)}
               aria-current={activeChapterId === chapter.id ? 'page' : undefined}
               onClick={(event) => {
-                if (event.metaKey || event.ctrlKey) return;
+                if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
                 event.preventDefault();
                 handleChapterSelect(chapter.id);
               }}
@@ -273,10 +289,11 @@ export function Docs() {
           {activeChapter?.sections.map((section, idx) => (
             <a
               key={idx}
-              href={`#section-${idx}`}
+              href={siteHref(`/docs/${activeChapterId}#section-${idx}`)}
               onClick={(e) => {
+                if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
                 e.preventDefault();
-                document.getElementById(`section-${idx}`)?.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+                navigate(`/docs/${activeChapterId}#section-${idx}`);
               }}
               aria-current={activeSection === idx ? 'location' : undefined}
               className={cn(

@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { ISSUES_URL, LICENSE_URL, NPM_URL, RELEASES_URL, REPO_URL } from '../../lib/site';
 import { handleSiteLinkClick } from '../../lib/utils';
+import { siteHref } from '../../lib/routing';
 
 type FooterLink = { label: string; href: string };
 
@@ -47,7 +48,7 @@ export function Footer() {
                   return (
                     <li key={link.href}>
                       <a
-                        href={link.href}
+                        href={siteHref(link.href)}
                         {...(external
                           ? { target: '_blank', rel: 'noreferrer' }
                           : { onClick: (event: React.MouseEvent<HTMLAnchorElement>) => handleSiteLinkClick(event, link.href) })}

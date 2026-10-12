@@ -1,12 +1,17 @@
 import { useEffect, useState } from 'react';
+import { sitePathname } from '../lib/routing';
 
 export function usePathname() {
-  const [pathname, setPathname] = useState(window.location.pathname);
+  const [pathname, setPathname] = useState(sitePathname);
 
   useEffect(() => {
-    const update = () => setPathname(window.location.pathname);
+    const update = () => setPathname(sitePathname());
     window.addEventListener('popstate', update);
-    return () => window.removeEventListener('popstate', update);
+    window.addEventListener('hashchange', update);
+    return () => {
+      window.removeEventListener('popstate', update);
+      window.removeEventListener('hashchange', update);
+    };
   }, []);
 
   return pathname;

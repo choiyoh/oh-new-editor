@@ -1,9 +1,11 @@
+import { siteHref, sitePathname } from './routing';
+
 export function cn(...classes: Array<string | false | null | undefined>): string {
   return classes.filter(Boolean).join(' ');
 }
 
 export function navigate(to: string) {
-  window.history.pushState({}, '', to);
+  window.history.pushState({}, '', siteHref(to));
   window.dispatchEvent(new PopStateEvent('popstate'));
 }
 
@@ -15,8 +17,8 @@ export function prefersReducedMotion() {
  * Click handler for in-site links: client-side routes for `/paths`, and
  * `#section` links that also work from other pages (e.g. the docs).
  */
-export function handleSiteLinkClick(event: { preventDefault(): void; metaKey?: boolean; ctrlKey?: boolean }, href: string) {
-  if (event.metaKey || event.ctrlKey) return;
+export function handleSiteLinkClick(event: { preventDefault(): void; metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean; altKey?: boolean; button?: number }, href: string) {
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || (event.button !== undefined && event.button !== 0)) return;
 
   if (href.startsWith('/')) {
     event.preventDefault();
@@ -25,7 +27,7 @@ export function handleSiteLinkClick(event: { preventDefault(): void; metaKey?: b
     return;
   }
 
-  if (href.startsWith('#') && window.location.pathname !== '/') {
+  if (href.startsWith('#') && sitePathname() !== '/') {
     event.preventDefault();
     navigate(`/${href}`);
     // Wait for the landing page to render before scrolling to the section.
