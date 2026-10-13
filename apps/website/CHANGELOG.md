@@ -1,5 +1,12 @@
 # @oh-new-editor/website
 
+## 0.1.4
+
+### Patch Changes
+
+- Updated dependencies [5efb703]
+  - @oh-new-editor/core@0.2.2
+
 ## 0.1.3
 
 ### Patch Changes

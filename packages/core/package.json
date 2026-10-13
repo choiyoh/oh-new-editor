@@ -1,6 +1,6 @@
 {
   "name": "@oh-new-editor/core",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Core engine for Oh New Editor",
   "type": "module",
   "files": [
