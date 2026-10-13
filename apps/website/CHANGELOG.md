@@ -1,5 +1,12 @@
 # @oh-new-editor/website
 
+## 0.1.2
+
+### Patch Changes
+
+- Updated dependencies [7de2221]
+  - @oh-new-editor/core@0.2.0
+
 ## 0.1.1
 
 ### Patch Changes
