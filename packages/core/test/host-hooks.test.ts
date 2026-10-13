@@ -147,11 +147,21 @@ describe('host integration hooks', () => {
     editor.destroy();
   });
 
-  it('createNotionSupport({ slashItems }) adds custom slash menu entries', () => {
-    const run = vi.fn();
+  it('searches and executes a custom slash command', async () => {
+    const run = vi.fn((view: ReturnType<typeof getView>) => view.dispatch(view.state.tr.insertText('custom result')));
     const support = createNotionSupport({ slashItems: [{ icon: '★', label: '내 항목', keywords: ['mine'], run }] });
-    const editor = createEditor(mountHost(), { toolbar: support });
-    expect(editor).toBeTruthy();
-    editor.destroy();
+    const host = mountHost();
+    const editor = createEditor(host, { toolbar: support });
+    try {
+      const view = editor.getView();
+      view.dispatch(view.state.tr.insertText('/mine'));
+      const labels = Array.from(host.querySelectorAll('.oh-editor__slash-item-label'));
+      expect(labels.map((label) => label.textContent)).toEqual(['내 항목']);
+      (labels[0].closest('button') as HTMLButtonElement).click();
+      await vi.waitFor(() => expect(view.state.doc.textContent).toBe('custom result'));
+      expect(run).toHaveBeenCalledWith(view);
+    } finally {
+      editor.destroy();
+    }
   });
 });

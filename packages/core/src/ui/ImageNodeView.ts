@@ -92,6 +92,7 @@ export class ImageNodeView implements NodeView {
   }
 
   private readonly handleResizeStart = (event: MouseEvent | TouchEvent) => {
+    if (!this.view.editable) return;
     event.preventDefault();
     event.stopPropagation();
 
@@ -111,6 +112,10 @@ export class ImageNodeView implements NodeView {
     const { signal } = this.dragAbortController;
 
     const onMove = (moveEvent: MouseEvent | TouchEvent) => {
+      if (!this.view.editable) {
+        onWindowBlur();
+        return;
+      }
       const moveClientX = 'touches' in moveEvent ? (moveEvent as TouchEvent).touches[0].clientX : (moveEvent as MouseEvent).clientX;
       const moveClientY = 'touches' in moveEvent ? (moveEvent as TouchEvent).touches[0].clientY : (moveEvent as MouseEvent).clientY;
       const deltaX = moveClientX - startClientX;
@@ -134,7 +139,10 @@ export class ImageNodeView implements NodeView {
       this.dragCleanup = null;
       this.dragAbortController = null;
 
-      if (pos == null) return;
+      if (pos == null || !this.view.editable) {
+        this.render(this.node);
+        return;
+      }
 
       const width = Math.max(MIN_WIDTH, this.img.getBoundingClientRect().width);
       const height = Math.max(MIN_WIDTH, this.img.getBoundingClientRect().height);
@@ -153,6 +161,7 @@ export class ImageNodeView implements NodeView {
       this.dragCleanup?.();
       this.dragCleanup = null;
       this.dragAbortController = null;
+      this.render(this.node);
     };
 
     window.addEventListener('mousemove', onMove, { signal });

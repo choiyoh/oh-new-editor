@@ -1,5 +1,6 @@
 import { EditorState, NodeSelection, Plugin, TextSelection } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
+import { closeHistory } from 'prosemirror-history';
 
 import { parseHtml } from './parsers/html';
 import { createHistoryPlugin } from './plugins/history';
@@ -72,6 +73,7 @@ class ProseMirrorEditor implements Editor {
   private outputFormat: 'html' | 'markdown';
   private readOnly = false;
   private destroyed = false;
+  private replacingDocument = false;
   private readonly imageInput = document.createElement('input');
   private readonly uploadLifecycle: UploadLifecycle = {
     isAlive: () => !this.destroyed
@@ -136,9 +138,7 @@ class ProseMirrorEditor implements Editor {
   }
 
   setContent(content: string, format: 'html' | 'markdown' = 'html') {
-    this.view.updateState(this.createState(this.parseContent(content, format)));
-    this.toolbar?.sync();
-    this.emit('change');
+    this.replaceDocument(this.parseContent(content, format));
   }
 
   getView() {
@@ -150,9 +150,23 @@ class ProseMirrorEditor implements Editor {
   }
 
   setDocument(doc: EditorDocument, options: { silent?: boolean } = {}) {
-    this.view.updateState(this.createState(doc));
+    if (doc.type.schema !== this.schema || doc.type !== this.schema.topNodeType) {
+      throw new RangeError('Expected a document from this editor\'s schema');
+    }
+    doc.check();
+    this.replaceDocument(doc, options.silent);
+  }
+
+  private replaceDocument(doc: EditorDocument, silent = false) {
+    this.replacingDocument = true;
+    try {
+      this.ai?.cancel();
+      this.view.updateState(this.createState(doc));
+    } finally {
+      this.replacingDocument = false;
+    }
     this.toolbar?.sync();
-    if (!options.silent) this.emit('change');
+    if (!silent) this.emit('change');
   }
 
   setOutputFormat(format: 'html' | 'markdown') {
@@ -287,7 +301,16 @@ class ProseMirrorEditor implements Editor {
 
     const currentAlt = selection.node.attrs.alt ?? '';
     const ask = this.options.prompt ?? (async (message: string, value: string) => window.prompt(message, value));
-    const nextAlt = await ask(this.messages.imageAltPrompt, currentAlt);
+    let nextAlt: string | null;
+    try {
+      nextAlt = await ask(this.messages.imageAltPrompt, currentAlt);
+    } catch (error) {
+      if (!this.destroyed) {
+        if (this.options.onError) this.options.onError(error);
+        else console.error('[oh-new-editor] Image alt prompt failed', error);
+      }
+      return;
+    }
     if (nextAlt === null || this.destroyed || this.readOnly) {
       return;
     }
@@ -315,6 +338,7 @@ class ProseMirrorEditor implements Editor {
       canUploadImages: Boolean(this.options.image?.upload),
       onPickImage: () => this.pickImage(),
       onEditImageAlt: () => this.editSelectedImageAlt(),
+      onError: this.options.onError,
       insertActions: this.options.table?.insertActions,
       tableActions: this.options.table?.actions,
       tableLimits: this.options.table ? { maxRows: this.options.table.maxRows, maxCols: this.options.table.maxCols } : undefined,
@@ -393,7 +417,7 @@ class ProseMirrorEditor implements Editor {
         this.view.updateState(nextState);
         this.toolbar?.sync();
         this.menuController?.sync();
-        if (transaction.docChanged) {
+        if (transaction.docChanged && !this.replacingDocument) {
           this.emit('change');
         }
       }
@@ -401,7 +425,7 @@ class ProseMirrorEditor implements Editor {
   }
 
   private isEditable() {
-    return !this.readOnly;
+    return !this.readOnly && !this.ai?.isGenerating;
   }
 
   private getAIContext(): AIContext {
@@ -445,9 +469,11 @@ class ProseMirrorEditor implements Editor {
       generate: async (prompt?: string) => {
         if (!prompt || this.readOnly || this.destroyed) return;
 
+        controller.cancel();
         isGenerating = true;
-        abortController = new AbortController();
-        const signal = abortController.signal;
+        const request = new AbortController();
+        abortController = request;
+        const signal = request.signal;
 
         // Lock editor as non-editable during active streaming
         this.view.setProps({ editable: () => false });
@@ -457,10 +483,11 @@ class ProseMirrorEditor implements Editor {
 
         // Initialize AI streaming state in plugin
         this.view.dispatch(
-          this.view.state.tr.setMeta(aiPluginKey, {
+          closeHistory(this.view.state.tr).setMeta(aiPluginKey, {
             active: true,
             startPos: cursorPos,
-            currentPos: cursorPos
+            currentPos: cursorPos,
+            endPos: cursorPos
           })
         );
 
@@ -475,15 +502,26 @@ class ProseMirrorEditor implements Editor {
 
               const pos = aiState.currentPos;
               const tr = this.view.state.tr.insertText(chunk, pos);
+              let insertedFrom = pos;
+              let insertedTo = pos;
+              tr.mapping.maps[0]?.forEach((_from, _to, newFrom, newTo) => {
+                insertedFrom = newFrom;
+                insertedTo = newTo;
+              });
+              const firstChunk = aiState.endPos === aiState.startPos;
               tr.setMeta('addToHistory', false);
-              tr.setMeta(aiPluginKey, { currentPos: pos + chunk.length });
+              tr.setMeta(aiPluginKey, {
+                startPos: firstChunk ? insertedFrom : aiState.startPos,
+                // Inserting at a block boundary may create a paragraph around the text.
+                currentPos: TextSelection.near(tr.doc.resolve(insertedTo), -1).from,
+                endPos: firstChunk ? insertedTo : tr.mapping.map(aiState.endPos, 1)
+              });
               this.view.dispatch(tr);
             }
           } else {
             const result = await aiOptions.onGenerate(prompt, context, signal);
             if (!signal.aborted && result) {
               const tr = this.view.state.tr.insertText(result, cursorPos);
-              tr.setMeta('addToHistory', false);
               this.view.dispatch(tr);
             }
           }
@@ -497,17 +535,34 @@ class ProseMirrorEditor implements Editor {
             console.error('[oh-new-editor] AI generation failed', err);
           }
         } finally {
-          // Close AI streaming state (creates history boundary)
-          const currentState = aiPluginKey.getState(this.view.state);
-          if (currentState?.active) {
-            this.view.dispatch(
-              this.view.state.tr.setMeta(aiPluginKey, { active: false })
-            );
-          }
+          // A cancelled request may settle after a replacement request or document.
+          if (abortController === request && !this.destroyed) {
+            const currentState = aiPluginKey.getState(this.view.state);
+            if (currentState?.active) {
+              if (aiOptions.onStream && currentState.endPos > currentState.startPos) {
+                // Stream previews bypass history. Reapply the completed range as one undoable edit.
+                const { startPos, endPos } = currentState;
+                const slice = this.view.state.doc.slice(startPos, endPos);
+                const selection = this.view.state.selection.getBookmark();
+                this.replacingDocument = true;
+                try {
+                  this.view.dispatch(this.view.state.tr.delete(startPos, endPos).setMeta('addToHistory', false));
+                  const tr = closeHistory(this.view.state.tr.replace(startPos, startPos, slice));
+                  tr.setSelection(selection.resolve(tr.doc));
+                  this.view.dispatch(tr);
+                } finally {
+                  this.replacingDocument = false;
+                }
+              }
+              this.view.dispatch(
+                closeHistory(this.view.state.tr).setMeta(aiPluginKey, { active: false })
+              );
+            }
 
-          abortController = null;
-          isGenerating = false;
-          this.view.setProps({ editable: () => this.isEditable() });
+            abortController = null;
+            isGenerating = false;
+            this.view.setProps({ editable: () => this.isEditable() });
+          }
         }
       },
 
@@ -517,11 +572,12 @@ class ProseMirrorEditor implements Editor {
 
         const aiState = aiPluginKey.getState(this.view.state);
         if (aiState?.active) {
-          const { startPos, currentPos } = aiState;
+          const { startPos, endPos } = aiState;
           const tr = this.view.state.tr;
-          if (currentPos > startPos) {
-            tr.delete(startPos, currentPos);
+          if (endPos > startPos) {
+            tr.delete(startPos, endPos);
           }
+          tr.setMeta('addToHistory', false);
           tr.setMeta(aiPluginKey, { active: false });
           this.view.dispatch(tr);
         }

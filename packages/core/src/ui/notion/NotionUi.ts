@@ -46,6 +46,7 @@ type NotionUiOptions = {
   tableLimits?: { maxRows?: number; maxCols?: number };
   messages?: EditorMessages;
   extraSlashItems?: SlashItemSpec[];
+  onError?: (error: unknown) => void;
 };
 
 type SlashCategory = 'basic' | 'media' | 'advanced';
@@ -136,6 +137,8 @@ export class NotionUi implements EditorToolbarController {
   private dismissedSlashFrom: number | null = null;
   private keyTarget: HTMLElement;
   private readOnly = false;
+  private destroyed = false;
+  private readonly onError?: (error: unknown) => void;
   private readonly onEditImageAlt?: () => void;
   private readonly messages: EditorMessages;
   private bubbleHideHandler: (() => void) | null = null;
@@ -181,6 +184,7 @@ export class NotionUi implements EditorToolbarController {
     this.messages = options.messages ?? DEFAULT_MESSAGES;
     this.linkEditor.setLabels(this.messages);
     this.readOnly = Boolean(options.readOnly);
+    this.onError = options.onError;
     this.onEditImageAlt = options.onEditImageAlt;
     this.tableLimits = options.tableLimits;
     this.element.className = 'oh-editor__notion-ui';
@@ -249,6 +253,7 @@ export class NotionUi implements EditorToolbarController {
   }
 
   destroy() {
+    this.destroyed = true;
     this.keyTarget.removeEventListener('keydown', this.handleKeyDown, true);
     this.view.dom.removeEventListener('input', this.handleInput);
     this.view.dom.removeAttribute('aria-expanded');
@@ -696,7 +701,7 @@ export class NotionUi implements EditorToolbarController {
   }
 
   private async applySlashItem(item: SlashItem | null) {
-    if (!item) return;
+    if (!item || this.destroyed || this.readOnly || !this.view.editable) return;
 
     const match = getSlashMatch(this.view.state);
     if (match) {
@@ -704,10 +709,20 @@ export class NotionUi implements EditorToolbarController {
     }
 
     this.hideSlashMenu();
-    await item.run();
-    // The table grid picker takes focus for keyboard selection; leave it there.
-    if (!this.gridPicker) this.view.focus();
-    this.sync();
+    try {
+      await item.run();
+    } catch (error) {
+      if (!this.destroyed) {
+        if (this.onError) this.onError(error);
+        else console.error('[oh-new-editor] Slash command failed', error);
+      }
+    } finally {
+      if (!this.destroyed && !this.readOnly && this.view.editable) {
+        // The table grid picker takes focus for keyboard selection; leave it there.
+        if (!this.gridPicker) this.view.focus();
+        this.sync();
+      }
+    }
   }
 
   private hideSlashMenu() {

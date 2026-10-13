@@ -105,6 +105,7 @@ export interface EditorToolbarSupport {
     canUploadImages?: boolean;
     onPickImage?: () => Promise<void>;
     onEditImageAlt?: () => void;
+    onError?: (error: unknown) => void;
     insertActions?: EditorToolbarAction[];
     tableActions?: EditorToolbarAction[];
     tableLimits?: { maxRows?: number; maxCols?: number };
@@ -160,6 +161,8 @@ export interface EditorOptions {
   resolveImageSrc?: (src: string) => string;
   /** Text prompt used for alt-text editing. Defaults to `window.prompt`, which Electron does not support. */
   prompt?: (message: string, value: string) => Promise<string | null>;
+  /** Reports failures from built-in UI actions, including async prompts and slash commands. */
+  onError?: (error: unknown) => void;
   /** Extra node views keyed by node type name. */
   nodeViews?: Record<string, NodeViewConstructor>;
   /** Custom ProseMirror schema (overrides table schema and default). */
@@ -189,6 +192,7 @@ export interface Editor {
   /**
    * Replace the whole document and reset history. `silent` suppresses the `change` event,
    * which is what you want when loading a document from disk.
+   * The document must use this editor's schema and top node type; invalid documents throw.
    */
   setDocument(doc: ProseMirrorNode, options?: { silent?: boolean }): void;
   readonly ai: EditorAIController | null;

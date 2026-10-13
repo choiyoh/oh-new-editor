@@ -120,12 +120,22 @@ function nextUploadId() {
  * for the image (or an error state) when it settles.
  */
 function startUpload(view: EditorView, id: string, file: File, options: NormalizedImageOptions, lifecycle: UploadLifecycle, messages: EditorMessages) {
-  void options.upload(file)
+  let pending: Promise<string>;
+  try {
+    pending = options.upload(file);
+  } catch (error) {
+    pending = Promise.reject(error);
+  }
+  void pending
     .then((src) => {
       if (!lifecycle.isAlive()) return;
       const decorations = imageUploadPluginKey.getState(view.state);
       const placeholder = decorations ? getPlaceholderDecoration(decorations, id) : null;
       if (!placeholder) return;
+      if (!view.editable) {
+        dispatchMeta(view, { type: 'remove', id });
+        return;
+      }
       if (!src) throw new Error(messages.uploadEmptyUrl);
 
       const image = view.state.schema.nodes.image.create({ src, alt: options.altText ? options.altText(file) : file.name });
@@ -138,6 +148,10 @@ function startUpload(view: EditorView, id: string, file: File, options: Normaliz
       if (!lifecycle.isAlive()) return;
       const decorations = imageUploadPluginKey.getState(view.state);
       if (!decorations || !getPlaceholderDecoration(decorations, id)) return;
+      if (!view.editable) {
+        dispatchMeta(view, { type: 'remove', id });
+        return;
+      }
       dispatchMeta(view, {
         type: 'update',
         id,
@@ -182,6 +196,7 @@ export function uploadImageFiles(
   lifecycle: UploadLifecycle = { isAlive: () => true },
   messages: EditorMessages = DEFAULT_MESSAGES
 ) {
+  if (!view.editable) return;
   const normalized = normalizeImageOptions(options);
   if (!normalized) {
     throw new Error('Image upload requires options.image.upload(file).');
@@ -216,7 +231,7 @@ export function createImageUploadPlugin(options?: EditorImageOptions, messages: 
             // leaves a stale "Uploading…" chip behind.
             onRetry: normalized && spec.file && spec.retryable
               ? () => {
-                  if (!currentView || !spec.file) return;
+                  if (!currentView || !currentView.editable || !spec.file) return;
                   dispatchMeta(currentView, {
                     ...spec,
                     type: 'update',
@@ -277,6 +292,7 @@ export function createImageUploadPlugin(options?: EditorImageOptions, messages: 
               if (!files.length) return false;
 
               event.preventDefault();
+              if (!view.editable) return true;
               const coords = view.posAtCoords({ left: event.clientX, top: event.clientY });
               for (const file of files) {
                 uploadSingleImage(view, file, normalized, coords?.pos ?? view.state.selection.from, lifecycle, messages);
@@ -284,6 +300,7 @@ export function createImageUploadPlugin(options?: EditorImageOptions, messages: 
               return true;
             },
             paste(view, event) {
+              if (!view.editable) return false;
               const files = Array.from(event.clipboardData?.files ?? []).filter((file) => file.type.startsWith('image/'));
               if (!files.length) return false;
               // Office apps put both markup and a rendered image of it on the
