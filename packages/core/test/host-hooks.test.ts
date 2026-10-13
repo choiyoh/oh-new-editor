@@ -1,8 +1,9 @@
-import { Plugin, PluginKey, TextSelection } from 'prosemirror-state';
+import { NodeSelection, Plugin, PluginKey, TextSelection } from 'prosemirror-state';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createEditor } from '../src/editor';
 import { createNotionSupport } from '../src/notion';
+import type { EditorToolbarSupport } from '../src/types';
 import { getView, mountHost } from './helpers';
 
 describe('host integration hooks', () => {
@@ -69,6 +70,63 @@ describe('host integration hooks', () => {
     expect((view.dom.querySelector('img') as HTMLImageElement).src).toBe('vault://x/a.png');
     editor.destroy();
   });
+
+  it('lets the host override the built-in image node view', () => {
+    const imageView = vi.fn(() => ({ dom: document.createElement('img') }));
+    const editor = createEditor(mountHost(), {
+      initialContent: '<p><img src="/a.png" alt="original"></p>',
+      nodeViews: { image: imageView }
+    });
+    expect(imageView).toHaveBeenCalledTimes(1);
+    editor.destroy();
+  });
+
+  it.each(['unchanged', 'replaced', 'readOnly', 'selectionMoved', 'destroyed'] as const)(
+    'handles an async alt response when the editor is %s', async (scenario) => {
+      let resolvePrompt!: (value: string | null) => void;
+      const prompt = vi.fn(() => new Promise<string | null>((resolve) => { resolvePrompt = resolve; }));
+      let editAlt!: NonNullable<Parameters<EditorToolbarSupport['createToolbar']>[1]['onEditImageAlt']>;
+      const editor = createEditor(mountHost(), {
+        initialContent: '<p><img src="/a.png" alt="original"></p>',
+        prompt,
+        toolbar: {
+          createToolbar(_view, options) {
+            editAlt = options.onEditImageAlt!;
+            return { element: document.createElement('div'), sync() {}, destroy() {}, setReadOnly() {} };
+          }
+        }
+      });
+      try {
+        const view = editor.getView();
+        const schema = view.state.schema;
+        editor.setDocument(schema.nodes.doc.create(null, [
+          schema.nodes.image.create({ src: '/a.png', alt: 'original' }),
+          schema.nodes.paragraph.create()
+        ]), { silent: true });
+        view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, 0)));
+        const response = editAlt();
+        expect(prompt).toHaveBeenCalledWith(expect.any(String), 'original');
+        if (scenario === 'replaced') {
+          const replacement = view.state.schema.nodes.image.create({ src: '/b.png', alt: 'replacement' });
+          const tr = view.state.tr.replaceWith(0, 1, replacement);
+          view.dispatch(tr.setSelection(NodeSelection.create(tr.doc, 0)));
+        } else if (scenario === 'readOnly') {
+          editor.setReadOnly(true);
+        } else if (scenario === 'selectionMoved') {
+          view.dispatch(view.state.tr.setSelection(TextSelection.atEnd(view.state.doc)));
+        } else if (scenario === 'destroyed') {
+          editor.destroy();
+        }
+        resolvePrompt('  new alt  ');
+        await response;
+        const image = view.state.doc.nodeAt(0)!;
+        expect(image.attrs.alt).toBe(scenario === 'unchanged' ? 'new alt' : scenario === 'replaced' ? 'replacement' : 'original');
+        if (scenario === 'replaced') expect(image.attrs.src).toBe('/b.png');
+      } finally {
+        if (scenario !== 'destroyed') editor.destroy();
+      }
+    }
+  );
 
   it('image altText derives the alt of uploaded images', async () => {
     const editor = createEditor(mountHost(), {

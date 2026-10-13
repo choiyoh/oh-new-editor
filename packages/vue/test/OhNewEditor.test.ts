@@ -1,7 +1,10 @@
-import { mount } from '@vue/test-utils';
-import { describe, expect, it } from 'vitest';
+import { enableAutoUnmount, mount } from '@vue/test-utils';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { OhNewEditor } from '../src/OhNewEditor';
+
+// Destroy every editor before jsdom is torn down, including pending focus checks.
+enableAutoUnmount(afterEach);
 
 describe('OhNewEditor (Vue)', () => {
   it('renders the editor container', () => {
