@@ -1,5 +1,11 @@
 # @oh-new-editor/core
 
+## 0.2.1
+
+### Patch Changes
+
+- c067c22: Restore bullet and ordered list markers in editor content when host CSS resets, such as Tailwind Preflight, remove native list styling.
+
 ## 0.2.0
 
 ### Minor Changes
