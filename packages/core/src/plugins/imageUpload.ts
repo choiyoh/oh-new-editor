@@ -26,6 +26,7 @@ type UploadPluginMeta =
 type NormalizedImageOptions = Required<Pick<EditorImageOptions, 'upload'>> & {
   maxSize: number;
   accept: string[];
+  altText?: (file: File) => string;
 };
 
 export type UploadLifecycle = {
@@ -93,7 +94,8 @@ function normalizeImageOptions(options?: EditorImageOptions): NormalizedImageOpt
   return {
     upload: options.upload,
     maxSize: options.maxSize ?? DEFAULT_MAX_IMAGE_SIZE,
-    accept: options.accept ?? DEFAULT_ACCEPTED_IMAGE_TYPES
+    accept: options.accept ?? DEFAULT_ACCEPTED_IMAGE_TYPES,
+    altText: options.altText
   };
 }
 
@@ -126,7 +128,7 @@ function startUpload(view: EditorView, id: string, file: File, options: Normaliz
       if (!placeholder) return;
       if (!src) throw new Error(messages.uploadEmptyUrl);
 
-      const image = view.state.schema.nodes.image.create({ src, alt: file.name });
+      const image = view.state.schema.nodes.image.create({ src, alt: options.altText ? options.altText(file) : file.name });
       const tr = view.state.tr
         .insert(placeholder.from, image)
         .setMeta(imageUploadPluginKey, { type: 'remove', id } satisfies UploadPluginMeta);

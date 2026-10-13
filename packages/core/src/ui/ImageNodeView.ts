@@ -24,7 +24,8 @@ export class ImageNodeView implements NodeView {
     private node: ProseMirrorNode,
     private readonly view: EditorView,
     private readonly getPos: (() => number | undefined),
-    messages: EditorMessages = DEFAULT_MESSAGES
+    messages: EditorMessages = DEFAULT_MESSAGES,
+    private readonly resolveSrc: (src: string) => string = (src) => src
   ) {
     this.dom.className = 'oh-editor__image-node';
     this.dom.contentEditable = 'false';
@@ -83,7 +84,7 @@ export class ImageNodeView implements NodeView {
 
   private render(node: ProseMirrorNode) {
     const { src, alt, title, width, height } = node.attrs;
-    this.img.src = src;
+    this.img.src = this.resolveSrc(src);
     this.img.alt = alt ?? '';
     this.img.title = title ?? '';
     this.img.style.width = width ? `${toPx(width)}px` : '';
@@ -170,12 +171,16 @@ export class ImageNodeView implements NodeView {
   };
 }
 
-export function createImageNodeView(view: EditorView, messages: EditorMessages = DEFAULT_MESSAGES) {
+export function createImageNodeView(
+  view: EditorView,
+  messages: EditorMessages = DEFAULT_MESSAGES,
+  resolveSrc?: (src: string) => string
+) {
   return (node: ProseMirrorNode, _view: EditorView, getPos: boolean | (() => number | undefined)) => {
     if (typeof getPos !== 'function') {
       throw new Error('Expected image node position accessor');
     }
 
-    return new ImageNodeView(node, view, getPos, messages);
+    return new ImageNodeView(node, view, getPos, messages, resolveSrc);
   };
 }

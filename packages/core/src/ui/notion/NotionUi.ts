@@ -31,7 +31,7 @@ import {
   toggleUnderline
 } from '../../commands';
 import { DEFAULT_MESSAGES, formatMessage, type EditorMessages } from '../../i18n';
-import type { EditorToolbarAction, EditorToolbarController } from '../../types';
+import type { EditorToolbarAction, EditorToolbarController, SlashItemSpec } from '../../types';
 import { normalizeHref } from '../../utils/url';
 import { onPress } from '../dom';
 import { toolbarIcons } from '../icons';
@@ -45,6 +45,7 @@ type NotionUiOptions = {
   insertActions?: EditorToolbarAction[];
   tableLimits?: { maxRows?: number; maxCols?: number };
   messages?: EditorMessages;
+  extraSlashItems?: SlashItemSpec[];
 };
 
 type SlashCategory = 'basic' | 'media' | 'advanced';
@@ -542,6 +543,17 @@ export class NotionUi implements EditorToolbarController {
         category: 'advanced',
         keywords: [action.title.toLowerCase()],
         run: () => action.run(this.view)
+      });
+    }
+
+    for (const extra of options.extraSlashItems ?? []) {
+      items.push({
+        icon: extra.icon,
+        label: extra.label,
+        description: extra.description,
+        category: extra.category ?? 'advanced',
+        keywords: extra.keywords,
+        run: () => extra.run(this.view)
       });
     }
 

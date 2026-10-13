@@ -1,10 +1,10 @@
 import './style.css';
 
 import { createEditor } from './editor';
-import type { Editor, EditorOptions, EditorToolbarSupport } from './types';
+import type { Editor, EditorOptions, EditorToolbarSupport, SlashItemSpec } from './types';
 import { NotionUi } from './ui/notion/NotionUi';
 
-export function createNotionSupport(): EditorToolbarSupport {
+export function createNotionSupport(config: { slashItems?: SlashItemSpec[] } = {}): EditorToolbarSupport {
   return {
     createToolbar(view, options) {
       return new NotionUi(view, {
@@ -13,7 +13,8 @@ export function createNotionSupport(): EditorToolbarSupport {
         onEditImageAlt: options.onEditImageAlt,
         insertActions: options.insertActions,
         tableLimits: options.tableLimits,
-        messages: options.messages
+        messages: options.messages,
+        extraSlashItems: config.slashItems
       });
     }
   };

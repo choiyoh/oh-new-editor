@@ -25,6 +25,8 @@ export type {
   EditorToolbarAction,
   EditorToolbarController,
   EditorToolbarSupport,
+  SlashItemSpec,
+  NodeViewConstructor,
   MarkSpec,
   NodeSpec,
   ParseRule,
