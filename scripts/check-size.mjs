@@ -3,7 +3,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 const checks = [
-  { pattern: 'packages/core/dist/index-*.js', label: 'core shared chunk', maxKb: 120 },
+  { pattern: 'packages/core/dist/editor-*.js', label: 'core shared chunk', maxKb: 120 },
   { pattern: 'apps/playground/dist/assets/index-*.js', label: 'playground bundle', maxKb: 160 }
 ];
 

@@ -11,3 +11,5 @@
 - `EditorImageOptions.altText`: 업로드한 이미지의 alt 생성 규칙
 - `Editor.getView()` / `getDocument()` / `setDocument(doc, { silent })`: 문서를 통째로 불러오기
 - `createNotionSupport({ slashItems })`: 슬래시 메뉴에 항목 추가(`SlashItemSpec`)
+
+빌드: `dependencies` 에 선언된 패키지(prosemirror-*, marked, turndown, dompurify)를 번들에 포함하지 않고 외부 의존성으로 둔다. 번들에 들어 있으면 호스트 앱이 가져온 ProseMirror 와 클래스 인스턴스가 둘로 갈라져(`OrderedMap`, `Schema`, `PluginKey` …) 스키마·플러그인을 확장할 수 없었다.
