@@ -9,7 +9,7 @@ import type {
   Schema
 } from 'prosemirror-model';
 import type { EditorState, Plugin, Transaction } from 'prosemirror-state';
-import type { DirectEditorProps, EditorView } from 'prosemirror-view';
+import type { DirectEditorProps, EditorView, NodeViewConstructor } from 'prosemirror-view';
 
 import type { EditorMessages } from './i18n';
 
@@ -29,6 +29,7 @@ export type {
   Transaction
 };
 
+export type { NodeViewConstructor };
 export type EditorDocument = ProseMirrorNode;
 export type EditorTransaction = Transaction;
 export type EditorPlugin = Plugin;
@@ -39,6 +40,20 @@ export interface EditorImageOptions {
   upload: (file: File) => Promise<string>;
   maxSize?: number;
   accept?: string[];
+  /** Alt text for an uploaded image. Defaults to the file name. */
+  altText?: (file: File) => string;
+}
+
+/** 슬래시 메뉴에 추가하는 항목. `createNotionSupport({ slashItems })`로 전달한다. */
+export interface SlashItemSpec {
+  /** 아이콘(innerHTML로 렌더링: SVG 문자열 또는 이모지) */
+  icon: string;
+  label: string;
+  description?: string;
+  category?: 'basic' | 'media' | 'advanced';
+  /** 검색 키워드(한글 초성 검색 포함) */
+  keywords: string[];
+  run: (view: EditorView) => unknown;
 }
 
 export interface EditorMarkdownSupport {
@@ -139,6 +154,14 @@ export interface EditorOptions {
   readOnly?: boolean;
   /** Custom ProseMirror plugins to register. */
   plugins?: Plugin[];
+  /** Plugins registered before the built-in keymaps (e.g. custom Enter/Backspace handling). */
+  priorityPlugins?: Plugin[];
+  /** Maps an image `src` to a loadable URL at render time (e.g. vault-relative path → vault:// URL). */
+  resolveImageSrc?: (src: string) => string;
+  /** Text prompt used for alt-text editing. Defaults to `window.prompt`, which Electron does not support. */
+  prompt?: (message: string, value: string) => Promise<string | null>;
+  /** Extra node views keyed by node type name. */
+  nodeViews?: Record<string, NodeViewConstructor>;
   /** Custom ProseMirror schema (overrides table schema and default). */
   schema?: Schema;
   /** AI collaboration hooks. */
@@ -160,6 +183,14 @@ export interface Editor {
   on(event: EditorEventName, handler: EditorEventHandler): void;
   off(event: EditorEventName, handler: EditorEventHandler): void;
   destroy(): void;
+  /** The underlying ProseMirror view. */
+  getView(): EditorView;
+  getDocument(): ProseMirrorNode;
+  /**
+   * Replace the whole document and reset history. `silent` suppresses the `change` event,
+   * which is what you want when loading a document from disk.
+   */
+  setDocument(doc: ProseMirrorNode, options?: { silent?: boolean }): void;
   readonly ai: EditorAIController | null;
   /** Switch editor UI style at runtime without destroying state. */
   setStyle(style: EditorStyle): void;

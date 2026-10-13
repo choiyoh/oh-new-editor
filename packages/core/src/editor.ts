@@ -16,7 +16,7 @@ import { createPlaceholderPlugin } from './plugins/placeholder';
 import { editorSchema } from './schema';
 import { resolveMessages, type EditorMessages } from './i18n';
 import { serializeHtml } from './serializers/html';
-import type { Editor, EditorAIController, EditorAIOptions, EditorEventHandler, EditorEventName, EditorMenuController, EditorOptions, EditorSchema, EditorStyle, EditorStyleMap, EditorToolbarController, EditorToolbarSupport, AIContext } from './types';
+import type { Editor, EditorDocument, EditorAIController, EditorAIOptions, EditorEventHandler, EditorEventName, EditorMenuController, EditorOptions, EditorSchema, EditorStyle, EditorStyleMap, EditorToolbarController, EditorToolbarSupport, AIContext } from './types';
 import { aiPluginKey, createAIPlugin } from './plugins/ai';
 import { createImageNodeView } from './ui/ImageNodeView';
 
@@ -42,6 +42,7 @@ function isSelectionInTableCell(state: EditorState) {
 
 function createPlugins(options: EditorOptions, schema: EditorSchema, messages: EditorMessages) {
   return [
+    ...(options.priorityPlugins ?? []),
     createHistoryPlugin(),
     createInputRulesPlugin(schema),
     createImageUploadPlugin(options.image, messages),
@@ -138,6 +139,20 @@ class ProseMirrorEditor implements Editor {
     this.view.updateState(this.createState(this.parseContent(content, format)));
     this.toolbar?.sync();
     this.emit('change');
+  }
+
+  getView() {
+    return this.view;
+  }
+
+  getDocument() {
+    return this.view.state.doc;
+  }
+
+  setDocument(doc: EditorDocument, options: { silent?: boolean } = {}) {
+    this.view.updateState(this.createState(doc));
+    this.toolbar?.sync();
+    if (!options.silent) this.emit('change');
   }
 
   setOutputFormat(format: 'html' | 'markdown') {
@@ -263,22 +278,30 @@ class ProseMirrorEditor implements Editor {
     uploadImageFiles(this.view, files, this.options.image, this.view.state.selection.from, this.uploadLifecycle, this.messages);
   }
 
-  private editSelectedImageAlt() {
+  private async editSelectedImageAlt() {
+    if (this.readOnly || this.destroyed) return;
     const selection = this.view.state.selection;
     if (!(selection instanceof NodeSelection) || selection.node.type !== this.view.state.schema.nodes.image) {
       return;
     }
 
     const currentAlt = selection.node.attrs.alt ?? '';
-    const nextAlt = window.prompt(this.messages.imageAltPrompt, currentAlt);
-    if (nextAlt === null) {
+    const ask = this.options.prompt ?? (async (message: string, value: string) => window.prompt(message, value));
+    const nextAlt = await ask(this.messages.imageAltPrompt, currentAlt);
+    if (nextAlt === null || this.destroyed || this.readOnly) {
+      return;
+    }
+
+    // The prompt is async, so re-read the selection: it may have moved while the dialog was open.
+    const current = this.view.state.selection;
+    if (!(current instanceof NodeSelection) || current.from !== selection.from || current.node !== selection.node) {
       return;
     }
 
     this.view.dispatch(
       this.view.state.tr
-        .setNodeMarkup(selection.from, undefined, {
-          ...selection.node.attrs,
+        .setNodeMarkup(current.from, undefined, {
+          ...current.node.attrs,
           alt: nextAlt.trim() || null
         })
         .scrollIntoView()
@@ -309,8 +332,9 @@ class ProseMirrorEditor implements Editor {
             throw new Error('Expected image node position accessor');
           }
 
-          return createImageNodeView(view, this.messages)(node, view, getPos);
-        }
+          return createImageNodeView(view, this.messages, this.options.resolveImageSrc)(node, view, getPos);
+        },
+        ...(this.options.nodeViews ?? {})
       },
       handleDoubleClickOn: (_view, pos, node) => {
         if (this.readOnly || node.type !== this.view.state.schema.nodes.image) {
