@@ -14,6 +14,7 @@ export function createNotionSupport(config: { slashItems?: SlashItemSpec[] } = {
         insertActions: options.insertActions,
         tableLimits: options.tableLimits,
         messages: options.messages,
+        onError: options.onError,
         extraSlashItems: config.slashItems
       });
     }

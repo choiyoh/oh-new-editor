@@ -4,6 +4,7 @@ export interface AIStreamState {
   active: boolean;
   startPos: number;
   currentPos: number;
+  endPos: number;
 }
 
 export const aiPluginKey = new PluginKey<AIStreamState>('ai-stream');
@@ -13,7 +14,7 @@ export function createAIPlugin() {
     key: aiPluginKey,
     state: {
       init() {
-        return { active: false, startPos: 0, currentPos: 0 };
+        return { active: false, startPos: 0, currentPos: 0, endPos: 0 };
       },
       apply(tr, state) {
         const meta = tr.getMeta(aiPluginKey);
